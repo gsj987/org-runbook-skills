@@ -1,273 +1,273 @@
 # Skill: brainstorm
 
-> **Type**: Task-Specific Skill（任务层）
-> **Trigger**: 当用户说"帮我研究X" / "脑爆Y" / "分析一下Z"时激活
-> **What it does**: 设计多角色并行脑爆→深化→合并的多轮研究流程，主动向用户提问以完善课题
-> **依赖**: runbook-org（基础层）+ runbook-multiagent（协调层）
-> **前置条件**: 在开始前，必须向用户提问以确认：目标/范围/交付物
+> **Type**: Task-Specific Skill (Task Layer)
+> **Trigger**: Activates when user says "research X" / "brainstorm Y" / "analyze Z"
+> **What it does**: Designs multi-role parallel brainstorming → deepening → merging multi-round research workflow, proactively asks users questions to refine the topic
+> **Depends on**: runbook-org (base layer) + runbook-multiagent (orchestration layer)
+> **Prerequisite**: Before starting, must ask user to confirm: goals/scope/deliverables
 
 ---
 
-## 什么是 brainstorm
+## What is brainstorm
 
-一个完整的多角色研究 skill。它做的事：
+A complete multi-role research skill. What it does:
 
 ```
-用户一句话
-  → 问清楚目标（主动提问）
-  → 设计角色和轮次
-  → 并行脑爆（多 sub-agent）
-  → 深化（Round 2）
-  → 合并产出（Round 3）
-  → 推送用户
-```
-
----
-
-## 0. 激活条件
-
-这个 skill 在以下情况激活：
-- 用户说"研究一下X"
-- 用户说"帮我分析这个项目"
-- 用户说"脑爆一下Y的方案"
-- 用户说"我想了解一下Z"
-
-**激活后第一件事：** 不是立即开始研究，而是**向用户提问**。
-
----
-
-## 1. 前置提问（必须先问，不要跳过）
-
-在开始任何研究前，向用户确认：
-
-### 问题A：研究目标（必须问）
-```
-我想帮你研究"<课题>"。我需要先确认几件事：
-
-1. **研究目标**是什么？
-   - 是想了解全貌（探索性）？
-   - 还是为了做某个具体决定（决策导向）？
-   - 或者是为了写一份文档给别人看（输出导向）？
-```
-
-### 问题B：交付形式（必须问）
-```
-2. 你希望最终拿到什么？
-   - 一份研究报告（Markdown/PDF）？
-   - 一份可以直接交给开发者的 PRD/技术方案？
-   - 还是只是聊天里的结论就够了？
-```
-
-### 问题C：范围边界（根据情况问）
-```
-3. 要不要限定范围？
-   - 某些方面不需要研究（如：暂时不考虑部署方案）？
-   - 重点关注哪个方面（如：更关注技术可行性还是用户体验）？
-```
-
-### 问题D：已有上下文（如果用户提供过材料）
-```
-4. 你之前提到过<上下文>，这些信息我可以直接用吗？
+User's one sentence
+  → Clarify goals (proactive questions)
+  → Design roles and rounds
+  → Parallel brainstorming (multiple sub-agents)
+  → Deepen (Round 2)
+  → Merge output (Round 3)
+  → Push to user
 ```
 
 ---
 
-## 2. 角色设计
+## 0. Activation Conditions
 
-根据课题类型，预设角色模板：
+This skill activates in the following situations:
+- User says "research X"
+- User says "analyze this project for me"
+- User says "brainstorm solutions for Y"
+- User says "I'd like to learn about Z"
 
-### 模板A：技术研究型（适合：项目分析、技术选型、架构设计）
-
-| 角色 | 研究方向 | 产出 |
-|------|---------|------|
-| `arch-agent` | 系统架构、模块边界、调用路径 | 架构文档 |
-| `deps-agent` | 依赖可用性、技术栈选型 | 依赖分析 |
-| `impl-agent` | 实现路径、工作量估算 | 实施计划 |
-
-### 模板B：产品研究型（适合：PRD生成、竞品分析、用户研究）
-
-| 角色 | 研究方向 | 产出 |
-|------|---------|------|
-| `pm-agent` | 用户需求、功能范围、优先级 | PRD |
-| `ux-agent` | 交互设计、页面流程、状态机 | UI规格 |
-| `tech-agent` | 技术可行性、API设计 | 技术方案 |
-
-### 模板C：综合研究型（适合：项目现状分析、综合性报告）
-
-| 角色 | 研究方向 | 产出 |
-|------|---------|------|
-| `research-agent` | 核心模块分析 | 模块发现 |
-| `product-agent` | 用户视角、体验、需求 | 产品发现 |
-| `infra-agent` | 基础设施、部署、运维 | 技术发现 |
+**First thing after activation:** Do NOT start researching immediately. Instead, **ask the user questions**.
 
 ---
 
-## 3. 轮次设计
+## 1. Pre-research Questions (Must Ask First, Don't Skip)
 
-### 标准轮次（默认3轮）
+Before starting any research, confirm with the user:
 
+### Question A: Research Goal (Must Ask)
 ```
-Round 1：并行脑爆
-  → 所有角色同时开始研究
-  → 各自产出 R1_<角色>_Brainstorm.md
-  → 主 agent 收集结果
+I want to help you research "<topic>". I need to confirm a few things first:
 
-Round 2：深化（可选，根据课题复杂度决定）
-  → 深化 Round 1 的发现
-  → 产出 R2_<角色>_Deep.md
-  → 主 agent 收集结果
-
-Round 3：合并输出
-  → 主 agent 合并所有产出
-  → 生成最终文档
-  → 推送用户
+1. What is the **research goal**?
+   - Want to understand the full picture (exploratory)?
+   - Or want to make a specific decision (decision-oriented)?
+   - Or want to write a document for others (output-oriented)?
 ```
 
-### 简化轮次（快速任务用2轮）
-
+### Question B: Deliverable Format (Must Ask)
 ```
-Round 1：并行脑爆（1-2个角色）
-Round 2：直接合并输出
-```
-
-**什么时候用2轮，什么时候用3轮：**
-
-| 课题复杂度 | 建议轮次 | 说明 |
-|-----------|---------|------|
-| 单一日标，范围清晰 | 2轮 | 直接脑爆→合并 |
-| 多模块、跨领域 | 3轮 | 脑爆→深化→合并 |
-| 需要切面分析 | 3轮 | 先架构，再切面，再合并 |
-| 探索性课题（不清楚有什么） | 3轮 | 留足发现空间 |
-
----
-
-## 4. 资料采集策略
-
-每个角色在脑爆前必须先采集资料。
-
-### 资料采集顺序
-
-```
-1. 用户提供的上下文（最优先，最可靠）
-2. 本地文件（/workspace/ 下的项目文件）
-3. Web搜索（batch_web_search）
-4. Web内容抓取（extract_content_from_websites）
-5. 已有研究文档（PRD/报告等）
+2. What do you want to receive in the end?
+   - A research report (Markdown/PDF)?
+   - A PRD/technical proposal ready for developers?
+   - Or just conclusions in chat?
 ```
 
-### 采集优先级（根据课题类型）
-
-**技术研究型：**
+### Question C: Scope Boundaries (Ask If Applicable)
 ```
-优先：项目源码 / README / 架构文档 / API文档
-其次：官方文档 / GitHub Issues / 技术博客
-兜底：搜索引擎
+3. Do you want to limit the scope?
+   - Some areas don't need research (e.g., deployment not considered for now)?
+   - Which aspect should be the focus (e.g., more concerned about technical feasibility or user experience)?
 ```
 
-**产品研究型：**
+### Question D: Existing Context (If User Provided Materials)
 ```
-优先：用户描述 / 现有PRD / 竞品截图
-其次：应用商店评论 / 用户访谈记录
-兜底：竞品官网 / 行业报告
+4. You mentioned <context> before. Can I use this information directly?
 ```
 
 ---
 
-## 5. 质量标准
+## 2. Role Design
 
-### 发现的质量分级
+Based on topic type, preset role templates:
+
+### Template A: Technical Research Type (Suitable for: project analysis, technology selection, architecture design)
+
+| Role | Research Direction | Output |
+|------|-------------------|--------|
+| `arch-agent` | System architecture, module boundaries, call paths | Architecture docs |
+| `deps-agent` | Dependency availability, tech stack selection | Dependency analysis |
+| `impl-agent` | Implementation path, effort estimation | Implementation plan |
+
+### Template B: Product Research Type (Suitable for: PRD generation, competitive analysis, user research)
+
+| Role | Research Direction | Output |
+|------|-------------------|--------|
+| `pm-agent` | User needs, feature scope, priorities | PRD |
+| `ux-agent` | Interaction design, page flow, state machine | UI specs |
+| `tech-agent` | Technical feasibility, API design | Technical proposal |
+
+### Template C: Comprehensive Research Type (Suitable for: project status analysis, comprehensive reports)
+
+| Role | Research Direction | Output |
+|------|-------------------|--------|
+| `research-agent` | Core module analysis | Module findings |
+| `product-agent` | User perspective, experience, needs | Product findings |
+| `infra-agent` | Infrastructure, deployment, operations | Technical findings |
+
+---
+
+## 3. Round Design
+
+### Standard Rounds (Default: 3 rounds)
+
+```
+Round 1: Parallel Brainstorming
+  → All roles start researching simultaneously
+  → Each produces R1_<Role>_Brainstorm.md
+  → Main agent collects results
+
+Round 2: Deepening (Optional, depends on topic complexity)
+  → Deepen Round 1 findings
+  → Produce R2_<Role>_Deep.md
+  → Main agent collects results
+
+Round 3: Merge Output
+  → Main agent merges all outputs
+  → Generate final document
+  → Push to user
+```
+
+### Simplified Rounds (2 rounds for quick tasks)
+
+```
+Round 1: Parallel Brainstorming (1-2 roles)
+Round 2: Direct merge output
+```
+
+**When to use 2 rounds vs 3 rounds:**
+
+| Topic Complexity | Recommended Rounds | Description |
+|-----------------|-------------------|-------------|
+| Single goal, clear scope | 2 rounds | Direct brainstorm → merge |
+| Multiple modules, cross-domain | 3 rounds | Brainstorm → deepen → merge |
+| Needs cross-section analysis | 3 rounds | Architecture first, then cross-sections, then merge |
+| Exploratory topic (unclear what's there) | 3 rounds | Leave enough room for discoveries |
+
+---
+
+## 4. Data Collection Strategy
+
+Each role must collect data before brainstorming.
+
+### Data Collection Order
+
+```
+1. User-provided context (highest priority, most reliable)
+2. Local files (project files under /workspace/)
+3. Web search (batch_web_search)
+4. Web content extraction (extract_content_from_websites)
+5. Existing research documents (PRDs/reports, etc.)
+```
+
+### Collection Priority (Based on Topic Type)
+
+**Technical Research Type:**
+```
+Priority: project source code / README / architecture docs / API docs
+Secondary: official docs / GitHub Issues / tech blogs
+Fallback: search engine
+```
+
+**Product Research Type:**
+```
+Priority: user description / existing PRD / competitor screenshots
+Secondary: app store reviews / user interview records
+Fallback: competitor websites / industry reports
+```
+
+---
+
+## 5. Quality Standards
+
+### Finding Quality Ratings
 
 ```markdown
-★★★ 发现（核心）：
-- 有具体的数字/事实
-- 有明确的证据来源
-- 能直接支撑结论
+★★★ Finding (Core):
+- Has specific numbers/facts
+- Has clear evidence source
+- Can directly support conclusion
 
-★★ 发现（支撑）：
-- 有方向性判断，但未经完全验证
-- 有来源，但二手信息
+★★ Finding (Supporting):
+- Has directional judgment but not fully verified
+- Has source but secondhand information
 
-★ 发现（探索）：
-- 猜测性判断
-- 需进一步验证
+★ Finding (Exploratory):
+- Speculative judgment
+- Needs further verification
 ```
 
-### 完成标准（每个角色必须满足）
+### Completion Standards (Each Role Must Meet)
 
-- [ ] 至少 3 条 ★★★ 发现
-- [ ] 每条发现都有 evidence
-- [ ] 有明确的结论（不是"可能/也许"）
-- [ ] 识别出课题的边界和局限性
+- [ ] At least 3 ★★★ findings
+- [ ] Every finding has evidence
+- [ ] Has clear conclusion (not "maybe/perhaps")
+- [ ] Identified topic boundaries and limitations
 
 ---
 
-## 6. 产出文件命名规范
+## 6. Output File Naming Convention
 
 ```
 /workspace/
-├── <项目名>/
-│   ├── R1_<角色A>_Brainstorm.md     ← Round 1 脑爆
-│   ├── R1_<角色B>_Brainstorm.md
-│   ├── R2_<角色A>_Deep.md           ← Round 2 深化
-│   ├── R2_<角色B>_Deep.md
-│   ├── R3_<产出名>_Final.md          ← Round 3 最终交付
-│   └── SUMMARY.md                     ← 执行摘要（每个角色一行）
+├── <project-name>/
+│   ├── R1_<RoleA>_Brainstorm.md     ← Round 1 Brainstorm
+│   ├── R1_<RoleB>_Brainstorm.md
+│   ├── R2_<RoleA>_Deep.md           ← Round 2 Deepening
+│   ├── R2_<RoleB>_Deep.md
+│   ├── R3_<OutputName>_Final.md     ← Round 3 Final Delivery
+│   └── SUMMARY.md                   ← Executive Summary (one line per role)
 └── org/
-    └── <项目名>.org                   ← 工作流执行记录
+    └── <project-name>.org           ← Workflow execution log
 ```
 
 ---
 
-## 7. 主动向用户提问的时机
+## 7. When to Proactively Ask Users Questions
 
-研究过程中，发现以下情况必须停下来问用户：
+During research, must stop and ask user in these situations:
 
-| 时机 | 问题 | 为什么要问 |
-|------|------|------------|
-| 目标不清时 | "你希望重点研究技术可行性还是用户体验？" | 防止做无用功 |
-| 发现方向分歧 | "关于X，有两种结论A和B，你更倾向哪个？" | 决策不能替用户做 |
-| 范围需要确认 | "这个功能要支持移动端吗？" | 防止做过头或不够 |
-| 遇到阻塞 | "这一步需要你提供Y才能继续" | 外部依赖无法绕过 |
-| Round 1 完成后 | "这是第一轮的发现，你最关心哪方面？" | 让用户参与方向调整 |
+| Situation | Question | Why Ask |
+|-----------|----------|---------|
+| Goal unclear | "Do you want to focus on technical feasibility or user experience?" | Prevent wasted effort |
+| Found direction divergence | "About X, there are two conclusions A and B. Which do you prefer?" | Can't make decisions for user |
+| Scope needs confirmation | "Does this feature need mobile support?" | Prevent overdoing or underdoing |
+| Encountered blocker | "I need you to provide Y at this step to continue" | External dependencies can't be bypassed |
+| After Round 1 complete | "These are Round 1 findings. What aspect do you care most about?" | Let user participate in direction adjustment |
 
-**提问格式：**
+**Question format:**
 ```
-我发现了X，但有两种可能的解读：
-A. <解读A> → 会影响<结论1>
-B. <解读B> → 会影响<结论2>
+I found X, but there are two possible interpretations:
+A. <Interpretation A> → Will affect <conclusion 1>
+B. <Interpretation B> → Will affect <conclusion 2>
 
-你更关心哪个方向？
+Which direction do you care more about?
 ```
 
 ---
 
-## 8. brainstorm 任务的结构化模板
+## 8. Brainstorm Task Structured Template
 
-在 org 文件里，每个 brainstorm 任务的结构：
+In the org file, each brainstorm task structure:
 
 ```org
-*** TODO <研究课题>
+*** TODO <research topic>
 :PROPERTIES:
 :ID: brainstorm-XXX
 :OWNER: main-agent
 :STATUS: in-progress
 :TYPE: brainstorm
-:ROUND: <当前轮次>
+:ROUND: <current round>
 :END:
 
-- 课题 :: <用户原始描述>
-- 研究目标 :: <经提问确认后的目标>
-- 交付形式 :: <PRD / 报告 / 执行计划>
-- 角色配置 :: <A/B/C 模板>
-- 轮次 :: <2轮 / 3轮>
-- 用户约束 :: <用户明确的范围限制>
+- Topic :: <user's original description>
+- Research Goal :: <goal confirmed through questions>
+- Deliverable Format :: <PRD / report / execution plan>
+- Role Configuration :: <Template A/B/C>
+- Rounds :: <2 rounds / 3 rounds>
+- User Constraints :: <explicit scope limits from user>
 
-- 用户提问历史 ::
-  - [时间] Q: <问题> → A: <回答>
+- User Question History ::
+  - [time] Q: <question> → A: <answer>
 
-- Round-1 状态 :: ✅/🔄/⬜
-- Round-2 状态 :: ✅/🔄/⬜
-- Round-3 状态 :: ✅/🔄/⬜
+- Round-1 Status :: ✅/🔄/⬜
+- Round-2 Status :: ✅/🔄/⬜
+- Round-3 Status :: ✅/🔄/⬜
 
 - Findings ::
 - Evidence ::
@@ -276,37 +276,37 @@ B. <解读B> → 会影响<结论2>
 
 ---
 
-## 9. 质量自检（在合并前执行）
+## 9. Quality Self-Check (Execute Before Merging)
 
-在 Round 3 合并前，主 agent 自检：
+Before Round 3 merge, main agent self-checks:
 
 ```
-□ 所有子 agent 都完成了吗？
-□ 每条发现都有 ★ 评级吗？
-□ 有没有互相矛盾的发现？（有 → 必须向用户确认）
-□ 发现是否覆盖了用户确认的研究目标？
-□ 最终交付物格式符合用户要求吗？
-□ 研究的局限性是否明确标注了？
+□ All sub-agents completed?
+□ Every finding has ★ rating?
+□ Any contradictory findings? (Yes → must confirm with user)
+□ Do findings cover user-confirmed research goals?
+□ Does final deliverable format match user requirements?
+□ Are research limitations clearly marked?
 ```
 
 ---
 
-## 10. 与 runbook-multiagent 的关系
+## 10. Relationship with runbook-multiagent
 
-brainstorm 是 runbook-multiagent 的**具体应用实例**：
+brainstorm is a **specific application instance** of runbook-multiagent:
 
 ```
 brainstorm skill
-  → 使用 runbook-multiagent 的派发+合并流程
-  → 自带角色模板和轮次设计（不需要每次设计）
-  → 自带质量标准和提问时机
+  → Uses runbook-multiagent's spawn + merge process
+  → Has built-in role templates and round design (no need to design each time)
+  → Has built-in quality standards and question timing
 ```
 
-当一个 brainstorm 任务在执行时：
-- 主 agent 按 brainstorm 的角色模板派发子 agent
-- 子 agent 严格遵循 runbook-org 的规则写 org
-- 主 agent 按 runbook-multiagent 的检查清单执行合并
+When a brainstorm task is executing:
+- Main agent spawns sub-agents according to brainstorm's role templates
+- Sub-agents strictly follow runbook-org rules when writing org
+- Main agent executes merge according to runbook-multiagent's checklist
 
 ---
 
-*这是 brainstorm skill（task-specific layer）。依赖于 runbook-org + runbook-multiagent。*
+*This is the brainstorm skill (task-specific layer). Depends on runbook-org + runbook-multiagent.*
