@@ -144,9 +144,8 @@ function parseWorkflow(orgContent: string): WorkflowState {
 // Worker Spawner
 // ============================================================
 
-function spawnWorker(config: SpawnRequest): ChildProcess {
+function spawnWorker(config: SpawnRequest, workerId: string): ChildProcess {
   const { role, task, taskId, skill, workflowPath, contextFiles } = config;
-  const workerId = `worker-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
   // Build pi command
   // Extension should be auto-discovered from .pi/extensions/
@@ -183,7 +182,13 @@ function spawnWorker(config: SpawnRequest): ChildProcess {
   console.log(`   Command: ${PI_COMMAND} ${args.join(" ")}`);
 
   // Determine working directory from workflowPath
-  const cwd = workflowPath ? path.dirname(path.resolve(workflowPath)) : process.cwd();
+  // Use path.resolve with the protocol's directory as base, not process.cwd()
+  // This ensures relative paths work correctly regardless of where supervisor started
+  const protocolDir = __dirname;
+  const resolvedPath = path.isAbsolute(workflowPath) 
+    ? workflowPath 
+    : path.join(protocolDir, "..", "..", workflowPath);  // Go up from adapters/pi to project root
+  const cwd = path.dirname(resolvedPath);
   
   const worker = spawn(PI_COMMAND, args, {
     stdio: ["ignore", "pipe", "pipe"],  // stdin = ignore (not pipe)
@@ -252,7 +257,7 @@ app.post("/worker/spawn", (req, res) => {
   const workerId = `worker-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
   
   try {
-    spawnWorker(config);
+    spawnWorker(config, workerId);
     
     res.json({
       success: true,
