@@ -1,8 +1,14 @@
-# Process Management (运行时任务追踪)
+# Pi Runtime Files
+.pi/
+
+# Dependencies
+node_modules/
+
+# Process Management
 *.org
 !examples/*.org
 
-# Brainstorm / Thinking Documents (临时思考文件)
+# Brainstorm / Thinking Documents
 R1_*.md
 R2_*.md
 R3_*.md
@@ -15,13 +21,10 @@ THOUGHTS.md
 NOTES.md
 EVALUATION.md
 
-# Output / Generated Files (临时输出)
+# Output / Generated Files
 output/
 *.tmp
 *.log
-
-# Evaluation (内部评估文档)
-EVALUATION.md
 
 # OS Files
 .DS_Store

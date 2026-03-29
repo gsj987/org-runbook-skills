@@ -206,7 +206,11 @@ deploy_adapter() {
     cp -f "$source_dir/package.json" "$target_dir/"
     
     echo -e "${BLUE}→${NC} Installing dependencies..."
-    (cd "$target_dir" && npm install --silent 2>/dev/null) || echo -e "  ${YELLOW}⚠${NC} npm install failed"
+    (cd "$target_dir" && npm install) || {
+        echo -e "${RED}✗ npm install failed in $target_dir${NC}"
+        echo "Please run manually: cd $target_dir && npm install"
+        return 1
+    }
     
     echo -e "${GREEN}✓${NC} Deployed pi-adapter to $target_dir"
 }
