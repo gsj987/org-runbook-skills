@@ -35,3 +35,7 @@ Thumbs.db
 *.swo
 *~
 .#*
+
+# Runbook Files (except template)
+runbook/*.org
+!runbook/000-runbook-template.org

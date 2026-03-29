@@ -1,0 +1,65 @@
+#+TITLE: Project Runbook
+#+PROJECT: <project-name>
+#+CREATED: <created-date>
+#+PHASE: discovery
+#+STATUS: IN-PROGRESS
+
+* Workflow Overview
+:PROPERTIES:
+:PHASE: discovery
+:STATUS: IN-PROGRESS
+:END:
+
+** Project: <project-name>
+:PROPERTIES:
+:TASK-ID: <project-id>
+:PHASE: discovery
+:STATUS: TODO
+:CREATED: <created-date>
+:END:
+
+*** TODO Begin discovery phase
+    - Identify scope and objectives
+    - Gather initial requirements
+    - Document assumptions
+
+*** TODO Phase: discovery → design
+    - Exit criteria: Requirements documented
+    - Gate: PM approval
+
+*** TODO Phase: design → implementation
+    - Exit criteria: Architecture approved
+    - Gate: Architecture review
+
+*** TODO Phase: implementation → test
+    - Exit criteria: Feature complete
+    - Gate: Code review
+
+*** TODO Phase: test → integration
+    - Exit criteria: All tests passing
+    - Gate: QA sign-off
+
+*** TODO Phase: integration → deploy-check
+    - Exit criteria: Integration tests pass
+    - Gate: Release approval
+
+*** TODO Phase: deploy-check → acceptance
+    - Exit criteria: Deployment verified
+    - Gate: Stakeholder acceptance
+
+** Non-Goals
+:PROPERTIES:
+:NON-GOALS: t
+:END:
+
+- [ ] No manual optimization beyond defined scope
+- [ ] No opportunistic refactoring
+- [ ] No unrelated bug fixing
+- [ ] No scope expansion without user approval
+
+** Notes
+:PROPERTIES:
+:NOTES: t
+:END:
+
+Created by orchestrator on <created-date>
