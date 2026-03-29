@@ -1,8 +1,8 @@
 ---
 name: orchestrator-skill
-description: Orchestrator profile for multi-agent workflow management. Activates with @orchestrate or @orchestrator.
-depends on: runbook-org, runbook-multiagent, exception-routing
-version: 2.0
+description: Orchestrator profile defining main agent behavior. Separates orchestration authority from domain execution authority. Activates with @orchestrate.
+depends on: runbook-org, runbook-multiagent
+version: 1.1
 ---
 
 # Orchestrator Profile
@@ -22,112 +22,11 @@ version: 2.0
 - Completion gating
 
 **Orchestrator CANNOT do by default:**
-- Code changes → use code-agent
-- Test writing → use test-agent
-- Configuration modifications → use ops-agent
-- Domain-specific work → delegate to appropriate role
-
----
-
-## Runbook Directory Convention
-
-**IMPORTANT:** All runbooks MUST be created in the `runbook/` directory with auto-incrementing numbers.
-
-```
-runbook/
-└── 000-runbook-template.org  # Template (DO NOT modify)
-    001-my-project.org        # First project
-    002-another-project.org   # Second project
-    ...
-```
-
-### Naming Convention
-
-```
-runbook/<sequence>-<project-name>.org
-```
-
-- `<sequence>`: 3-digit number starting from 001
-- `<project-name>`: lowercase with hyphens
-
-### workflow.init Usage
-
-```javascript
-// CORRECT: Use runbook/ directory with numbered naming
-workflow.init({
-  workflowPath: "runbook/001-my-project.org",
-  projectName: "My Project",
-  phases: "discovery,design,implementation,test,acceptance"
-})
-
-// WRONG: Creating workflow.org at root
-// WRONG: Creating workflow without sequence number
-```
-
-### First Run
-
-When starting for the first time:
-1. Check `runbook/` directory for existing runbooks
-2. Determine next sequence number (001, 002, etc.)
-3. Create runbook with pattern: `runbook/<next>-<project-name>.org`
-
----
-
-## Built-in Tools
-
-### workflow.init
-Create a new runbook in the `runbook/` directory.
-
-```
-INPUT:
-  - workflowPath: string (REQUIRED) - Must be "runbook/<sequence>-<name>.org"
-  - projectName: string (REQUIRED)
-  - phases: string (optional) - comma-separated phases
-
-RULE: workflowPath MUST be in runbook/ directory with numbered naming
-```
-
-### workflow.claimTask
-Claim a task for the current orchestrator session.
-
-### workflow.appendFinding
-Record a finding with rating (★★★, ★★, ★).
-
-### workflow.setStatus
-Update task status: TODO | IN-PROGRESS | DONE | BLOCKED
-
-### workflow.advancePhase
-Advance workflow to next phase.
-
-### workflow.update
-Write all findings to the workflow file.
-
-### worker.spawn
-Spawn a worker agent to execute specialist work.
-
-```
-INPUT:
-  - role: string (REQUIRED) - code-agent, test-agent, ops-agent, pm-agent, etc.
-  - task: string (REQUIRED) - What the worker should do
-  - taskId: string (REQUIRED) - Task identifier
-  - workflowPath: string (REQUIRED) - Path to workflow.org
-
-ROLE ROUTING:
-| Requirement     | Role           |
-|-----------------|----------------|
-| Code changes    | code-agent     |
-| Tests           | test-agent     |
-| Config/Deploy   | ops-agent      |
-| Architecture    | arch-agent     |
-| Requirements    | pm-agent       |
-| Research        | research-agent |
-```
-
-### worker.awaitResult
-Wait for spawned worker to complete.
-
-### worker.status
-Check worker status: running | completed | failed
+- Code changes
+- Test writing
+- Configuration modifications
+- Debugging implementation details
+- Domain-specific work
 
 ## Why This Separation?
 

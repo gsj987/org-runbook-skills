@@ -1,7 +1,7 @@
 /**
- * pi-adapter: Extension for org-runbook-skills
+ * pi-adapter: Extension for multi-agent orchestration
  * 
- * Purpose: Implements runtime adapter layer for pi (pi-mono)
+ * Purpose: Implements runtime adapter layer for spawning worker agents
  * 
  * Key capabilities:
  * - Custom workflow tools (workflow.*, worker.*)
@@ -208,8 +208,8 @@ function findProtocolScript(): string | null {
     path.join(__dirname, "..", "protocol.ts"),
     // Global adapters directory
     path.join(process.env.HOME || "", ".pi", "adapters", "pi", "protocol.ts"),
-    // Source directory
-    path.join("/home/gsj987/Workspace/org-runbook-skills/adapters/pi", "protocol.ts"),
+    // Project .pi/extensions/pi-adapter/
+    path.join(process.env.HOME || "", ".pi", "extensions", "pi-adapter", "protocol.ts"),
   ];
 
   for (const p of possiblePaths) {
