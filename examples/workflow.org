@@ -1,0 +1,559 @@
+#+title:      JWT Authentication Implementation Project
+#+date:       [2026-03-29 Sat 10:00]
+#+filetags:   :project:auth:api:
+#+identifier: 20260329T100000
+#+TODO:       TODO(t) IN-PROGRESS(i) | DONE(d) BLOCKED(b) CANCELLED(c)
+
+* Project: Add JWT Authentication to API Service
+:PROPERTIES:
+:PHASE: design
+:CREATED: 2026-03-29T10:00
+:END:
+
+This project demonstrates the complete v2.1 workflow with:
+- Parent task with EXIT_CRITERIA and NON-GOALS
+- Two parallel subtasks (architecture + API design)
+- Brainstorm round outputs
+- Exception handling and remediation
+- Merge and phase transition
+
+---
+
+** IN-PROGRESS Add JWT Authentication to API Service
+:PROPERTIES:
+:ID: parent-jwt-001
+:OWNER: orchestrator
+:PHASE: design
+:EXIT_CRITERIA:
+:  - [ ] Architecture approved by arch-agent
+:  - [ ] API contracts defined by api-agent
+:  - [ ] Implementation complete with tests
+:  - [ ] Integration with existing auth system verified
+:NON-GOALS:
+:  - [ ] no database schema changes
+:  - [ ] no frontend changes
+:  - [ ] no performance optimization beyond token validation
+:END:
+
+- Goal :: Add JWT-based authentication to existing REST API without changing database schema
+- Context ::
+  - Existing REST API using Express.js
+  - Current auth: session-based cookies
+  - Target: JWT tokens in Authorization header
+  - No database changes allowed per constraint
+- Findings ::
+- Evidence ::
+- Next Actions ::
+  - [ ] Spawn arch-agent for architecture design
+  - [ ] Spawn api-agent for API contract definition
+  - [ ] Wait for both to complete
+  - [ ] Merge findings and advance to implementation phase
+
+---
+
+*** IN-PROGRESS Design JWT Authentication Architecture
+:PROPERTIES:
+:ID: arch-jwt-001
+:PARENT: parent-jwt-001
+:OWNER: arch-agent
+:PHASE: design
+:EXIT_CRITERIA:
+:  - [ ] Token lifecycle defined
+:  - [ ] Middleware structure approved
+:  - [ ] Security considerations documented
+:END:
+
+- Goal :: Design architecture for JWT authentication layer
+- Context ::
+  - Express.js API
+  - No database changes allowed
+  - Need to maintain existing session compatibility during transition
+- Findings ::
+
+** Checkpoint
+- [2026-03-29 10:05] 🤖 spawn arch-agent (estimated 15 min) → arch-jwt-001
+
+- [2026-03-29 10:08] F-001: JWT tokens should use RS256 algorithm for forward secrecy  # Rating: ★★★
+  - [2026-03-29 10:09] E-001: web: https://auth0.com/blog/brute-forcing-jwt-hs256/  # Finding: F-001  # Rating: ★★
+
+- [2026-03-29 10:10] F-002: Token lifecycle: Access (15min) + Refresh (7d) pattern recommended  # Rating: ★★★
+  - [2026-03-29 10:11] E-002: web: https://developer.okta.com/blog/2022/05/16/jwt-best-practices  # Finding: F-002  # Rating: ★★
+
+- [2026-03-29 10:12] F-003: Middleware stack should be: Auth Middleware → Rate Limiter → Routes  # Rating: ★★★
+  - [2026-03-29 10:13] E-003: file: /workspace/api/src/middleware/  # Finding: F-003  # Rating: ★★★
+
+- [2026-03-29 10:14] F-004: No database changes required - use in-memory token blacklist during transition  # Rating: ★★★
+  - [2026-03-29 10:15] E-004: command: grep -r "session" /workspace/api/src --include="*.js" | wc -l  # Finding: F-004  # Rating: ★★★
+
+** Checkpoint
+- [2026-03-29 10:18] F-005: Security risks: Token theft, Refresh token rotation, Blacklist management  # Rating: ★★
+  - [2026-03-29 10:19] E-005: blog: https://paragonie.com/blog/2017/03/jwt-key-management-oblivious-http  # Finding: F-005  # Rating: ★
+
+** Output Contract Delivered
+- Module: auth/middleware
+- Calls: request → jwt-verify → blacklist-check → user-lookup → next
+- Risks: Token blacklist grows unbounded (needs cleanup job)
+
+- Evidence ::
+  - [2026-03-29 10:20] E-006: file: /workspace/api/src/middleware/jwt-auth.middleware.js  # Finding: F-003  # Rating: ★★★
+  - [2026-03-29 10:20] E-007: file: /workspace/api/docs/jwt-architecture.md  # Finding: F-002  # Rating: ★★★
+
+- Next Actions :: [Completed]
+
+*** DONE Design JWT Authentication Architecture
+:PROPERTIES:
+:UPDATED: 2026-03-29T10:20
+:END:
+
+---
+
+*** IN-PROGRESS Define JWT API Contracts
+:PROPERTIES:
+:ID: api-jwt-001
+:PARENT: parent-jwt-001
+:OWNER: api-agent
+:PHASE: design
+:EXIT_CRITERIA:
+:  - [ ] POST /auth/login contract defined
+:  - [ ] POST /auth/refresh contract defined
+:  - [ ] POST /auth/logout contract defined
+:  - [ ] Error responses standardized
+:END:
+
+- Goal :: Define API contracts for JWT authentication endpoints
+- Context ::
+  - REST API following OpenAPI 3.0
+  - Need backward compatibility with existing session auth
+- Findings ::
+
+** Checkpoint
+- [2026-03-29 10:06] 🤖 spawn api-agent (estimated 12 min) → api-jwt-001
+
+- [2026-03-29 10:09] F-006: POST /auth/login should return { accessToken, refreshToken, expiresIn }  # Rating: ★★★
+  - [2026-03-29 10:10] E-008: file: /workspace/api/src/routes/auth.routes.js  # Finding: F-006  # Rating: ★★★
+
+- [2026-03-29 10:12] F-007: Token format: JWT with claims { sub: userId, email, role, iat, exp }  # Rating: ★★★
+  - [2026-03-29 10:13] E-009: web: https://datatracker.ietf.org/doc/html/rfc7519  # Finding: F-007  # Rating: ★★
+
+- [2026-03-29 10:15] F-008: POST /auth/refresh requires refreshToken in body, returns new accessToken  # Rating: ★★★
+  - [2026-03-29 10:16] E-010: file: /workspace/api/src/controllers/auth.controller.js  # Finding: F-008  # Rating: ★★★
+
+- [2026-03-29 10:18] F-009: Error responses should follow RFC 7807 Problem Details format  # Rating: ★★
+  - [2026-03-29 10:19] E-011: web: https://datatracker.ietf.org/doc/html/rfc7807  # Finding: F-009  # Rating: ★★
+
+** Output Contract Delivered
+- Endpoints: POST /auth/login, POST /auth/refresh, POST /auth/logout
+- Request/Response: JSON with JWT tokens
+- Errors: 401 (invalid), 403 (expired), 429 (rate limited)
+
+- Evidence ::
+  - [2026-03-29 10:20] E-012: file: /workspace/api/docs/openapi-auth.yaml  # Finding: F-006  # Rating: ★★★
+
+- Next Actions :: [Completed]
+
+*** DONE Define JWT API Contracts
+:PROPERTIES:
+:UPDATED: 2026-03-29T10:20
+:END:
+
+---
+
+** 🤖 Progress Update
+- ✅ arch-jwt-001 — DONE (architecture: RS256 + access/refresh pattern)
+- ✅ api-jwt-001 — DONE (contracts: 3 endpoints + RFC 7807 errors)
+- ⏳ Next: Merge findings and advance to implementation
+
+---
+
+** Merge Checkpoint
+:PROPERTIES:
+:MERGE-ID: merge-001
+:PARENT: parent-jwt-001
+:TIMESTAMP: 2026-03-29T10:25
+:SUBTASKS-INCLUDED: arch-jwt-001, api-jwt-001
+:END:
+
+** Merged Findings
+
+| ID | Finding | Rating | Source |
+|----|---------|--------|--------|
+| F-001 | RS256 algorithm required | ★★★ | Auth0 blog |
+| F-002 | Access (15min) + Refresh (7d) token lifecycle | ★★★ | Okta blog |
+| F-003 | Middleware: jwt-verify → blacklist-check → user-lookup | ★★★ | Code analysis |
+| F-004 | No database changes needed | ★★★ | grep session count |
+| F-005 | Security risks: theft, rotation, blacklist | ★★ | Paragonie blog |
+| F-006 | /auth/login returns { accessToken, refreshToken } | ★★★ | Existing routes |
+| F-007 | JWT claims: sub, email, role, iat, exp | ★★★ | RFC 7519 |
+| F-008 | /auth/refresh returns new accessToken | ★★★ | Controller analysis |
+| F-009 | Error format: RFC 7807 Problem Details | ★★ | RFC 7807 |
+
+** Merged Evidence
+
+All F-<uuid> have corresponding E-<uuid> with rating >= ★★.
+
+** Synthesis
+
+Architecture and API contracts are aligned:
+- Token lifecycle (F-002) matches API contract (F-006, F-008)
+- Middleware design (F-003) supports claims structure (F-007)
+- Security considerations (F-005) require blacklist (noted in arch output)
+- Database-free approach (F-004) confirmed compatible
+
+** Phase Transition Decision
+
+Design phase gate passed. Proceeding to implementation phase.
+
+** Next Actions (Implementation Phase)
+- [ ] Spawn code-agent for middleware implementation
+- [ ] Spawn code-agent for auth controller implementation
+- [ ] Spawn test-agent for unit tests
+
+---
+
+** Phase Advance
+:PROPERTIES:
+:PHASE: implementation
+:UPDATED: 2026-03-29T10:25
+:END:
+
+---
+
+** 🤖 Phase Gate Passed
+- From: design
+- To: implementation
+- Subtasks Complete: 2/2
+- Next: Spawning code-agent for implementation
+
+---
+
+*** IN-PROGRESS Implement JWT Middleware
+:PROPERTIES:
+:ID: impl-middleware-001
+:PARENT: parent-jwt-001
+:OWNER: code-agent
+:PHASE: implementation
+:EXIT_CRITERIA:
+:  - [ ] jwt-verify middleware created
+:  - [ ] blacklist-check middleware created
+:  - [ ] Tests written and passing
+:END:
+
+- Goal :: Implement JWT authentication middleware
+- Context ::
+  - Based on architecture: F-003
+  - Algorithm: RS256 (F-001)
+  - Claims: sub, email, role (F-007)
+- Findings ::
+  - [2026-03-29 10:30] F-010: RS256 requires RSA key pair for signing  # Rating: ★★★
+    - [2026-03-29 10:31] E-013: command: openssl genrsa -out private.pem 2048  # Finding: F-010  # Rating: ★★★
+
+** Implementation Complete
+- jwt-auth.middleware.js created
+- All functions: verifyToken, blacklistCheck, attachUser
+
+*** DONE Implement JWT Middleware
+:PROPERTIES:
+:UPDATED: 2026-03-29T11:00
+:END:
+
+---
+
+*** IN-PROGRESS Implement Auth Controller
+:PROPERTIES:
+:ID: impl-controller-001
+:PARENT: parent-jwt-001
+:OWNER: code-agent
+:PHASE: implementation
+:EXIT_CRITERIA:
+:  - [ ] POST /auth/login implemented
+:  - [ ] POST /auth/refresh implemented
+:  - [ ] POST /auth/logout implemented
+:END:
+
+- Goal :: Implement authentication controller endpoints
+- Context ::
+  - Based on API contracts: F-006, F-008
+  - Error format: RFC 7807 (F-009)
+- Findings ::
+  - [2026-03-29 10:35] F-011: Refresh token should be stored in HTTP-only cookie, not localStorage  # Rating: ★★★
+    - [2026-03-29 10:36] E-014: web: https://cheatsheetseries.owasp.org/CHECHKS/2023/01/25/A08_2021-Software_and_Data_Integrity_Failures.html  # Finding: F-011  # Rating: ★★
+
+** Implementation Complete
+- auth.controller.js created
+- All endpoints: /login, /refresh, /logout
+
+*** DONE Implement Auth Controller
+:PROPERTIES:
+:UPDATED: 2026-03-29T11:15
+:END:
+
+---
+
+** 🤖 Progress Update
+- ✅ impl-middleware-001 — DONE
+- ✅ impl-controller-001 — DONE
+- ⏳ Next: Spawn test-agent for test phase
+
+---
+
+** Phase Advance
+:PROPERTIES:
+:PHASE: test
+:UPDATED: 2026-03-29T11:15
+:END:
+
+---
+
+** 🤖 Phase Gate Passed
+- From: implementation
+- To: test
+- Subtasks Complete: 2/2
+- Next: Spawning test-agent
+
+---
+
+*** IN-PROGRESS Write Unit Tests for JWT Auth
+:PROPERTIES:
+:ID: test-jwt-001
+:PARENT: parent-jwt-001
+:OWNER: test-agent
+:PHASE: test
+:EXIT_CRITERIA:
+:  - [ ] Token generation tests
+:  - [ ] Token verification tests
+:  - [ ] Middleware tests
+:  - [ ] Integration scenario tests
+:END:
+
+- Goal :: Write comprehensive tests for JWT authentication
+- Context ::
+  - Existing test framework: Jest
+  - Coverage target: 80%+
+- Findings ::
+
+- [2026-03-29 11:20] F-012: Test token expiration edge cases  # Rating: ★★★
+  - [2026-03-29 11:21] E-015: command: cat /workspace/api/jest.config.js  # Finding: F-012  # Rating: ★★★
+
+** Test Execution
+
+```
+FAIL auth.test.js
+  ✕ should reject expired token (125ms)
+  
+  expect(received).toBe(expected)
+  
+  Expected: 401 Unauthorized
+  Received: 500 Internal Server Error
+  
+  Details: jwt.verify throws unhandled error on expired token
+```
+
+** Exception Detected
+:PROPERTIES:
+:EXCEPTION-ID: ex-001
+:TASK-ID: test-jwt-001
+:PARENT-ID: parent-jwt-001
+:PHASE: test
+:TIMESTAMP: 2026-03-29T11:25
+:END:
+
+** Classification
+- Exception Type :: impl-bug
+- Confidence :: high
+- Evidence :: Test output above (500 instead of 401)
+
+** Routing Decision
+- Selected Role :: code-agent
+- Rationale :: Root cause is unhandled exception in jwt.verify
+- Output Contract :: Fix middleware to catch and return 401
+
+** Remediation Subtask
+- Subtask ID :: impl-fix-001
+- Goal :: Fix jwt.verify to catch expired/invalid tokens and return 401
+- Exit Criteria :: [ ] Test passes with 401 response
+
+** Re-entry Plan
+- Re-entry Phase :: test (after fix)
+- Next Action :: Re-run test-jwt-001
+
+---
+
+** 🤖 Exception Detected
+- Phase: test
+- Gate Failed: token expiration test
+- Type: impl-bug
+- Action: Creating remediation subtask for code-agent
+- Re-entry: test after completion
+
+---
+
+** 🤖 Progress Update
+- 🔄 test-jwt-001 — Exception: impl-bug in jwt.verify
+- ⏳ Creating impl-fix-001 for code-agent
+
+---
+
+*** IN-PROGRESS Fix JWT Verify Error Handling
+:PROPERTIES:
+:ID: impl-fix-001
+:PARENT: parent-jwt-001
+:OWNER: code-agent
+:PHASE: test
+:EXIT_CRITERIA:
+:  - [ ] jwt.verify wrapped in try-catch
+:  - [ ] Expired token returns 401
+:  - [ ] Invalid token returns 401
+:END:
+
+- Goal :: Fix jwt.verify to handle expired/invalid tokens properly
+- Context ::
+  - Exception ex-001: jwt.verify throws unhandled error
+  - Expected: 401 Unauthorized
+- Findings ::
+  - [2026-03-29 11:30] F-013: jsonwebtoken library throws JsonWebTokenError on invalid tokens  # Rating: ★★★
+    - [2026-03-29 11:31] E-016: command: node -e "require('jsonwebtoken').verify('invalid', 'secret')"  # Finding: F-013  # Rating: ★★★
+
+** Fix Applied
+```javascript
+try {
+  const decoded = jwt.verify(token, publicKey, { algorithms: ['RS256'] });
+  req.user = decoded;
+  next();
+} catch (err) {
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({ error: 'Token expired' });
+  }
+  return res.status(401).json({ error: 'Invalid token' });
+}
+```
+
+*** DONE Fix JWT Verify Error Handling
+:PROPERTIES:
+:UPDATED: 2026-03-29T11:35
+:END:
+
+---
+
+** 🤖 Progress Update
+- ✅ impl-fix-001 — DONE (error handling added)
+- 🔄 test-jwt-001 — Re-running tests after fix
+
+---
+
+** Re-entry: test-jwt-001
+- [2026-03-29 11:40] Test re-run: All tests passing
+- [2026-03-29 11:41] Coverage: 87% (exceeds 80% target)
+
+*** DONE Write Unit Tests for JWT Auth
+:PROPERTIES:
+:UPDATED: 2026-03-29T11:41
+:END:
+
+---
+
+** 🤖 Phase Gate Passed
+- From: test
+- To: integration
+- Test Results: All 42 tests passing, coverage 87%
+- Next: Spawn integration-agent
+
+---
+
+** Phase Advance
+:PROPERTIES:
+:PHASE: integration
+:UPDATED: 2026-03-29T11:41
+:END:
+
+---
+
+*** IN-PROGRESS Integration Test with Existing Auth System
+:PROPERTIES:
+:ID: integration-001
+:PARENT: parent-jwt-001
+:OWNER: integration-agent
+:PHASE: integration
+:EXIT_CRITERIA:
+:  - [ ] Existing session users can migrate to JWT
+:  - [ ] Backward compatibility maintained
+:  - [ ] No breaking changes to existing API
+:END:
+
+- Goal :: Verify integration with existing authentication system
+- Context ::
+  - Existing: session-based auth in /middleware/auth.js
+  - New: JWT auth in /middleware/jwt-auth.js
+  - Need: Coexistence during transition
+- Findings :
+  - [2026-03-29 11:45] F-014: Session and JWT auth can coexist by checking Authorization header first  # Rating: ★★★
+    - [2026-03-29 11:46] E-017: file: /workspace/api/src/middleware/index.js  # Finding: F-014  # Rating: ★★★
+
+** Integration Complete
+- Both auth systems load without conflict
+- Session users get JWT on next login
+- No existing functionality broken
+
+*** DONE Integration Test with Existing Auth System
+:PROPERTIES:
+:UPDATED: 2026-03-29T11:55
+:END:
+
+---
+
+** Final Merge Checkpoint
+:PROPERTIES:
+:MERGE-ID: merge-final
+:PARENT: parent-jwt-001
+:TIMESTAMP: 2026-03-29T11:56
+:SUBTASKS-INCLUDED: arch-jwt-001, api-jwt-001, impl-middleware-001, impl-controller-001, impl-fix-001, test-jwt-001, integration-001
+:END:
+
+** All Findings (Preserved F-<uuid>)
+
+| ID | Finding | Rating | Phase |
+|----|---------|--------|-------|
+| F-001 | RS256 algorithm required | ★★★ | design |
+| F-002 | Access (15min) + Refresh (7d) token lifecycle | ★★★ | design |
+| F-003 | Middleware: jwt-verify → blacklist-check → user-lookup | ★★★ | design |
+| F-004 | No database changes needed | ★★★ | design |
+| F-005 | Security risks: theft, rotation, blacklist | ★★ | design |
+| F-006 | /auth/login returns { accessToken, refreshToken } | ★★★ | design |
+| F-007 | JWT claims: sub, email, role, iat, exp | ★★★ | design |
+| F-008 | /auth/refresh returns new accessToken | ★★★ | design |
+| F-009 | Error format: RFC 7807 Problem Details | ★★ | design |
+| F-010 | RS256 requires RSA key pair | ★★★ | implementation |
+| F-011 | Refresh token in HTTP-only cookie | ★★★ | implementation |
+| F-012 | Test token expiration edge cases | ★★★ | test |
+| F-013 | jsonwebtoken throws JsonWebTokenError | ★★★ | test |
+| F-014 | Session and JWT can coexist | ★★★ | integration |
+
+** Exit Criteria Verification
+
+- [x] Architecture approved by arch-agent → F-001 to F-005
+- [x] API contracts defined by api-agent → F-006 to F-009
+- [x] Implementation complete with tests → F-010, F-011 + 42 tests passing
+- [x] Integration with existing auth system verified → F-014
+
+** Deliverables
+
+- Middleware: /workspace/api/src/middleware/jwt-auth.middleware.js
+- Controller: /workspace/api/src/controllers/auth.controller.js
+- Tests: /workspace/api/tests/auth.test.js (87% coverage)
+- Docs: /workspace/api/docs/jwt-architecture.md, openapi-auth.yaml
+
+---
+
+*** DONE Add JWT Authentication to API Service
+:PROPERTIES:
+:PHASE: acceptance
+:UPDATED: 2026-03-29T11:56
+:END:
+
+---
+
+** 🤖 Project Complete
+- Final Phase: acceptance
+- Exit Criteria: [✓] all met
+- Total Findings: 14 (9×★★★, 4×★★, 1×★)
+- Exceptions Handled: 1 (impl-bug → code-agent remediated)
+- Deliverables: 4 files + test suite

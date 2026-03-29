@@ -1,0 +1,34 @@
+# Process Management (运行时任务追踪)
+*.org
+!examples/*.org
+
+# Brainstorm / Thinking Documents (临时思考文件)
+R1_*.md
+R2_*.md
+R3_*.md
+*_Brainstorm.md
+*_Deep.md
+*_Final.md
+*_merge*.md
+THINKING.md
+THOUGHTS.md
+NOTES.md
+EVALUATION.md
+
+# Output / Generated Files (临时输出)
+output/
+*.tmp
+*.log
+
+# Evaluation (内部评估文档)
+EVALUATION.md
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# Editor Files
+*.swp
+*.swo
+*~
+.#*
