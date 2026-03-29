@@ -1,8 +1,15 @@
+---
+name: exception-routing
+description: Deterministic path from anomaly detection to resolution ownership. Provides exception taxonomy, routing rules, and re-entry protocols. Activates with @exception.
+depends on: runbook-org, orchestrator-skill
+version: 1.0
+---
+
 # Exception Routing Protocol
 
 > "Classify before acting. Dispatch before doing."
 
-> **Design Note:** Org-mode TODO keywords (TODO, IN-PROGRESS, DONE, BLOCKED) are the state mechanism for tasks. See [[file:runbook-org/SKILL.md][runbook-org]] for state machine definition.
+> **Design Note:** Org-mode TODO keywords (TODO, IN-PROGRESS, DONE, BLOCKED) are the state mechanism. See [[file:../runbook-org/SKILL.md][runbook-org]] for state machine definition.
 
 ## Purpose
 
@@ -84,15 +91,6 @@ IF multiple exceptions AND dependent
 | deploy-check | code | test | test | integration | ops | deps | infra | arch |
 | acceptance | pm | pm | pm | pm | ops | deps | infra | pm |
 
-### Urgency × SLA
-
-| Urgency | Response Time | Resolution Target |
-|---------|---------------|-------------------|
-| critical | Immediate | 1-2 hours |
-| high | 4 hours | Same day |
-| medium | 24 hours | 2 days |
-| low | 72 hours | 1 week |
-
 ---
 
 ## Re-entry Rules
@@ -116,15 +114,6 @@ Remediation Complete?
     └── Decide: escalate / retry / abandon
 ```
 
-### Re-entry Phase Options
-
-| Situation | Re-entry Phase |
-|-----------|---------------|
-| impl-bug fixed, test passing | Continue test phase |
-| integration fixed, tests ready | Re-run integration |
-| requirement clarified | Return to design |
-| Cannot resolve | Block and escalate to user |
-
 ---
 
 ## Fallback Rules
@@ -140,49 +129,14 @@ Orchestrator may perform direct work (fallback) ONLY when:
 | Runtime limitation | Cannot spawn sub-agent | Log limitation, note impact |
 | Emergency | Production down, no time to delegate | Log urgency, document after |
 
-### Fallback Recording Format
-
-```org
-** Orchestrator Fallback (EXCEPTION)
-:PROPERTIES:
-:FALLBACK-ID: <uuid>
-:TIMESTAMP: <now>
-:TRIGGER: <fallback condition>
-:END:
-
-- Reason delegation not used :: <specific reason>
-- What was done :: <action taken>
-- Boundary crossed :: <role boundary violated>
-- Estimated time saved :: <duration>
-- Recommendation :: <should new role be created?>
-- Post-incident action :: <review, role proposal>
-```
-
 ---
 
 ## Exception Lifecycle
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                    EXCEPTION LIFECYCLE                       │
-├──────────────────────────────────────────────────────────────┤
-│                                                               │
-│  DETECTED ──classify──> CLASSIFIED ──route──> DISPATCHED    │
-│       │                    │                   │             │
-│       │                    │                   ▼             │
-│       │                    │            WAITING_FOR_RESULT   │
-│       │                    │                   │             │
-│       │                    │                   ▼             │
-│       │                    │              RESOLVED           │
-│       │                    │                   │             │
-│       │                    │                   ▼             │
-│       │                    │            RE-ENTRY_DECISION    │
-│       │                    │                   │             │
-│       │                    ▼                   ▼             │
-│       ▼            ESCALATED ────────────────────────> USER   │
-│  UNKNOWN                                                   │
-│                                                               │
-└──────────────────────────────────────────────────────────────┘
+DETECTED → CLASSIFIED → DISPATCHED → WAITING_FOR_RESULT → RESOLVED → RE-ENTRY_DECISION
+     │           │              │                    │            │              │
+     └───────────┴──────────────┴────────────────────┴────────────┴──────────────→ ESCALATED
 ```
 
 ### State Definitions
@@ -213,22 +167,10 @@ Each exception record MUST contain:
 | routing | Yes | Role selected, rationale |
 | subtask | Yes | Remediation task details |
 | re-entry | Yes | Next phase/action |
-| resolution | Yes (post) | How it was resolved |
 
 ---
 
-## Integration with orchestrator-skill
-
-This document is referenced by `orchestrator-skill/SKILL.md`. Orchestrator must:
-
-1. Follow exception taxonomy when classifying
-2. Apply routing matrix for role selection
-3. Use re-entry rules for phase transitions
-4. Record fallback per the fallback rules
-
----
-
-## Quick Reference Card
+## Quick Reference
 
 ```
 EXCEPTION DETECTED → STOP → CLASSIFY → ROUTE → DISPATCH → WAIT → RESOLVE → RE-ENTER
@@ -236,17 +178,4 @@ EXCEPTION DETECTED → STOP → CLASSIFY → ROUTE → DISPATCH → WAIT → RES
 Classification: impl-bug | test-failure | flaky | mismatch | config | dep | env | req-gap | unknown
 Routing: Use matrix for phase × exception → role
 Fallback: Only when no role | user requests | runtime limit | emergency
-Recording: Must have evidence + rationale + re-entry plan
 ```
-
----
-
-## Anti-Patterns
-
-| Anti-Pattern | Problem | Correct Approach |
-|-------------|---------|------------------|
-| "I'll fix it while waiting" | Violates non-execution | Create task, wait properly |
-| "This is clearly a X problem" (without classification) | May be wrong | Always classify first |
-| "User won't care about this detail" | Assumption | Route to pm-agent |
-| "This is faster than documenting" | Shortcut | Record exception properly anyway |
-| "Let's try a few things and see" | Improvisation | Classify, route, wait |

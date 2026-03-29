@@ -1,0 +1,10 @@
+{
+  "name": "pi-adapter",
+  "version": "1.0.0",
+  "description": "pi extension for org-runbook-skills",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "^0.34.49",
+    "express": "^4.18.2"
+  }
+}
