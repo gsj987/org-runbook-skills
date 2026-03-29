@@ -1,5 +1,7 @@
 # org-runbook-skills for Agents
 
+> **Note:** All documentation must be written in **English**. No Chinese comments or mixed language content.
+
 ## Quick Start
 
 ### 1. Deploy to Your Project
