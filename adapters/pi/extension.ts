@@ -747,7 +747,10 @@ IMPORTANT: Orchestrator should use this tool instead of attempting domain work d
         });
 
         return {
-          content: [{ type: "text", text: `Spawned ${role} worker for task ${taskId}` }],
+          content: [{ 
+            type: "text", 
+            text: `Spawned ${role} worker for task ${taskId}\nWorker ID: ${response.workerId}` 
+          }],
           details: {
             success: true,
             workerId: response.workerId,
