@@ -19,8 +19,7 @@ const __dirname = path.dirname(__filename);
 // Logging
 // ============================================================
 
-const LOG_DIR = process.env.PI_SUPERVISOR_LOG_DIR || 
-  path.join(process.env.HOME || "/tmp", ".pi-adapter", "logs");
+const LOG_DIR = path.join(process.env.HOME || "/tmp", ".pi-adapter", "logs");
 const LOG_FILE = path.join(LOG_DIR, `supervisor-${new Date().toISOString().slice(0,10)}.log`);
 
 // Ensure log directory exists
@@ -28,23 +27,32 @@ if (!fs.existsSync(LOG_DIR)) {
   fs.mkdirSync(LOG_DIR, { recursive: true });
 }
 
-function log(level: string, message: string, ...args: any[]): void {
+// Simple file logger - no console replacement to avoid recursion
+function writeLog(message: string): void {
   const timestamp = new Date().toISOString();
-  const logLine = `[${timestamp}] [${level}] ${message} ${args.map(a => JSON.stringify(a)).join(" ")}\n`;
-  
-  // Write to file
+  const logLine = `[${timestamp}] ${message}\n`;
   try {
     fs.appendFileSync(LOG_FILE, logLine);
   } catch (e) {
-    // Ignore file write errors
+    // Ignore
   }
-  
-  // Also print to stdout
-  process.stdout.write(logLine);
 }
 
-// Initial log
-log("INFO", `📝 Supervisor log file: ${LOG_FILE}`);
+// Convenience log functions that also print to console
+function log(...args: any[]): void {
+  const msg = args.join(" ");
+  writeLog(msg);
+  console.log(...args);
+}
+
+function logError(...args: any[]): void {
+  const msg = args.join(" ");
+  writeLog(`ERROR: ${msg}`);
+  console.error(...args);
+}
+
+log("📝 Supervisor starting...");
+log(`📝 Log file: ${LOG_FILE}`);
 
 // ============================================================
 // Singleton: Only one supervisor per project
@@ -97,9 +105,9 @@ function cleanupPidFile(): void {
 // Check for existing supervisor
 const existingPid = checkExistingSupervisor();
 if (existingPid) {
-  console.log(`⚠️ Supervisor already running with PID ${existingPid}`);
-  console.log(`   Exiting to prevent duplicate supervisor.`);
-  console.log(`   If you need to restart, kill PID ${existingPid} first.`);
+  log(`⚠️ Supervisor already running with PID ${existingPid}`);
+  log(`   Exiting to prevent duplicate supervisor.`);
+  log(`   If you need to restart, kill PID ${existingPid} first.`);
   process.exit(0);
 }
 
@@ -274,8 +282,8 @@ function spawnWorker(config: SpawnRequest, workerId: string): ChildProcess {
     PI_RESULTS_DIR: RESULTS_DIR,
   };
 
-  console.log(`🚀 Spawning ${role} worker (${workerId})`);
-  console.log(`   Command: ${PI_COMMAND} ${args.join(" ")}`);
+  log(`🚀 Spawning ${role} worker (${workerId})`);
+  log(`   Command: ${PI_COMMAND} ${args.join(" ")}`);
 
   // Workers should always run in the project root (parent of adapters/)
   // This ensures relative paths work correctly
@@ -303,7 +311,7 @@ function spawnWorker(config: SpawnRequest, workerId: string): ChildProcess {
 
   // Handle exit
   worker.on("exit", (code) => {
-    console.log(`👋 Worker ${workerId} exited with code ${code}`);
+    log(`👋 Worker ${workerId} exited with code ${code}`);
     
     // Read result file if exists
     const resultFile = path.join(RESULTS_DIR, `${workerId}.json`);
@@ -312,7 +320,7 @@ function spawnWorker(config: SpawnRequest, workerId: string): ChildProcess {
         const result = JSON.parse(fs.readFileSync(resultFile, "utf-8")) as WorkerResult;
         state.results.set(workerId, result);
       } catch (e) {
-        console.error(`Failed to read result file: ${e}`);
+        logError(`Failed to read result file: ${e}`);
       }
     }
 
@@ -464,7 +472,7 @@ app.get("/workers", (req, res) => {
 // ============================================================
 
 function main() {
-  console.log(`
+  log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║           pi-adapter Supervisor v1.0                      ║
 ╠═══════════════════════════════════════════════════════════╣
@@ -475,15 +483,15 @@ function main() {
   `);
 
   app.listen(PORT, () => {
-    console.log(`✅ Supervisor listening on http://localhost:${PORT}`);
-    console.log(`\nAPI Endpoints:`);
-    console.log(`  GET  /health              - Health check`);
-    console.log(`  POST /worker/spawn        - Spawn a worker`);
-    console.log(`  GET  /worker/:id/status   - Get worker status`);
-    console.log(`  POST /worker/:id/await    - Await worker result`);
-    console.log(`  GET  /results            - Get all results`);
-    console.log(`  POST /workflow/update     - Write findings to workflow`);
-    console.log(`  GET  /workers            - List active workers`);
+    log(`✅ Supervisor listening on http://localhost:${PORT}`);
+    log(`API Endpoints:`);
+    log(`  GET  /health              - Health check`);
+    log(`  POST /worker/spawn        - Spawn a worker`);
+    log(`  GET  /worker/:id/status   - Get worker status`);
+    log(`  POST /worker/:id/await    - Await worker result`);
+    log(`  GET  /results            - Get all results`);
+    log(`  POST /workflow/update     - Write findings to workflow`);
+    log(`  GET  /workers            - List active workers`);
   });
 }
 
