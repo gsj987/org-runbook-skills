@@ -16,6 +16,71 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // ============================================================
+// Singleton: Only one supervisor per project
+// ============================================================
+
+const PID_FILE = path.join(process.env.HOME || "/tmp", ".pi-adapter-supervisor.pid");
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);  // Signal 0 just checks if process exists
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function checkExistingSupervisor(): number | null {
+  try {
+    if (fs.existsSync(PID_FILE)) {
+      const pid = parseInt(fs.readFileSync(PID_FILE, "utf-8").trim(), 10);
+      if (!isNaN(pid) && isProcessAlive(pid)) {
+        return pid;
+      }
+      // Stale PID file, remove it
+      fs.unlinkSync(PID_FILE);
+    }
+  } catch {
+    // Ignore errors
+  }
+  return null;
+}
+
+function writePidFile(): void {
+  fs.writeFileSync(PID_FILE, String(process.pid), { mode: 0o644 });
+}
+
+function cleanupPidFile(): void {
+  try {
+    if (fs.existsSync(PID_FILE)) {
+      const pid = parseInt(fs.readFileSync(PID_FILE, "utf-8").trim(), 10);
+      if (pid === process.pid) {
+        fs.unlinkSync(PID_FILE);
+      }
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+// Check for existing supervisor
+const existingPid = checkExistingSupervisor();
+if (existingPid) {
+  console.log(`⚠️ Supervisor already running with PID ${existingPid}`);
+  console.log(`   Exiting to prevent duplicate supervisor.`);
+  console.log(`   If you need to restart, kill PID ${existingPid} first.`);
+  process.exit(0);
+}
+
+// Write our PID
+writePidFile();
+
+// Cleanup on exit
+process.on("exit", cleanupPidFile);
+process.on("SIGINT", () => { cleanupPidFile(); process.exit(0); });
+process.on("SIGTERM", () => { cleanupPidFile(); process.exit(0); });
+
+// ============================================================
 // Types
 // ============================================================
 
