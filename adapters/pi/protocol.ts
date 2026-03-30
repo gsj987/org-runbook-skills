@@ -33,22 +33,18 @@ function log(level: string, message: string, ...args: any[]): void {
   const logLine = `[${timestamp}] [${level}] ${message} ${args.map(a => JSON.stringify(a)).join(" ")}\n`;
   
   // Write to file
-  fs.appendFileSync(LOG_FILE, logLine);
+  try {
+    fs.appendFileSync(LOG_FILE, logLine);
+  } catch (e) {
+    // Ignore file write errors
+  }
   
-  // Also print to console
-  console.log(logLine.trim());
+  // Also print to stdout
+  process.stdout.write(logLine);
 }
 
-// Replace console.log with our logger
-const originalConsoleLog = console.log;
-const originalConsoleError = console.error;
-const originalConsoleWarn = console.warn;
-
-console.log = (...args: any[]) => log("INFO", args.join(" "));
-console.error = (...args: any[]) => log("ERROR", args.join(" "));
-console.warn = (...args: any[]) => log("WARN", args.join(" "));
-
-originalConsoleLog(`📝 Supervisor log file: ${LOG_FILE}`);
+// Initial log
+log("INFO", `📝 Supervisor log file: ${LOG_FILE}`);
 
 // ============================================================
 // Singleton: Only one supervisor per project
