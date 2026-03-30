@@ -365,19 +365,23 @@ export default function piAdapterExtension(pi: ExtensionAPI) {
   pi.registerTool({
     name: "workflow.init",
     label: "Initialize Workflow",
-    description: "Initialize a new workflow.org file with orchestrator structure. Creates the initial runbook if none exists.",
+    description: "Initialize a new workflow.org file following the schema defined in examples/schema.md. Creates a runbook with proper TODO keywords, Task/Finding/Evidence objects, and phase gates.",
     parameters: Type.Object({
-      workflowPath: Type.String({ description: "Path for workflow.org" }),
+      workflowPath: Type.String({ description: "Path for workflow (e.g., runbook/001-my-project.org)" }),
       projectName: Type.String({ description: "Project name" }),
+      projectId: Type.Optional(Type.String({ description: "Project ID (auto-generated if not provided)" })),
       phases: Type.Optional(Type.String({ description: "Comma-separated phases (default: discovery,design,implementation,test,integration,deploy-check,acceptance)" })),
     }),
     execute: async (_toolCallId, params) => {
-      const { workflowPath, projectName, phases } = params as {
-        workflowPath: string; projectName: string; phases?: string;
+      const { workflowPath, projectName, projectId, phases } = params as {
+        workflowPath: string; projectName: string; projectId?: string; phases?: string;
       };
       
       const phaseList = phases?.split(",").map(p => p.trim()) || 
         ["discovery", "design", "implementation", "test", "integration", "deploy-check", "acceptance"];
+      const projectIdFinal = projectId || `proj-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      const parentId = `parent-${Date.now()}`;
+      const now = new Date().toISOString();
       
       // Check if file already exists
       if (fs.existsSync(workflowPath)) {
@@ -393,64 +397,76 @@ export default function piAdapterExtension(pi: ExtensionAPI) {
         };
       }
       
-      // Generate phase transitions dynamically
-      const firstPhase = phaseList[0];
-      const lastPhase = phaseList[phaseList.length - 1];
-      let phaseTransitions = `*** TODO Begin ${firstPhase} phase
-    - Identify scope and objectives
-    - Gather initial requirements
-    - Document assumptions
-
-`;
-      
+      // Generate phase gate tasks
+      let phaseGates = "";
       for (let i = 0; i < phaseList.length - 1; i++) {
         const current = phaseList[i];
         const next = phaseList[i + 1];
-        phaseTransitions += `*** TODO Phase: ${current} → ${next}
-    - Exit criteria: Define exit criteria for ${current}
-    - Gate: Review and approval required
-
+        phaseGates += `
+*** TODO Phase: ${current} → ${next}
+:PROPERTIES:
+:ID: gate-${current}-${next}
+:PARENT: ${parentId}
+:OWNER: orchestrator
+:PHASE: ${current}
+:EXIT_CRITERIA:
+:  - [ ] Define exit criteria for ${current}
+:END:
+- Gate :: Approval required to proceed
+- Next Actions ::
 `;
       }
       
-      // Create initial workflow content
-      const content = `#+TITLE: ${projectName}
-#+PROJECT: ${projectName}
-#+CREATED: ${new Date().toISOString()}
-#+PHASE: ${firstPhase}
-#+STATUS: IN-PROGRESS
-
-* Workflow Overview
+      // Generate subtasks for discovery phase
+      const discoverySubtasks = `
+*** TODO Discovery subtask
 :PROPERTIES:
-:PHASE: ${firstPhase}
-:STATUS: IN-PROGRESS
+:ID: subtask-discovery-001
+:PARENT: ${parentId}
+:OWNER: <role-code>
+:PHASE: discovery
+:CREATED: ${now}
+:END:
+- Goal :: <goal>
+- Context ::
+- Findings ::
+- Evidence ::
+- Next Actions ::
+`;
+      
+      // Create workflow content following schema
+      const content = `#+title:      ${projectName}
+#+date:       [${now.slice(0, 10)}]
+#+filetags:   :project:
+#+identifier: ${projectIdFinal}
+#+TODO:       TODO(t) IN-PROGRESS(i) | DONE(d) BLOCKED(b) CANCELLED(c)
+
+* Project: ${projectName}
+:PROPERTIES:
+:PHASE: discovery
 :END:
 
-** Project: ${projectName}
+** IN-PROGRESS <overall coordination>
 :PROPERTIES:
-:TASK-ID: ${projectName.toLowerCase().replace(/\s+/g, "-")}
-:PHASE: ${firstPhase}
-:STATUS: TODO
-:CREATED: ${new Date().toISOString()}
+:ID: ${parentId}
+:OWNER: orchestrator
+:PHASE: discovery
+:CREATED: ${now}
+:UPDATED: ${now}
+:EXIT_CRITERIA:
+:  - [ ] Define project-specific exit criteria
+:NON-GOALS:
+:  - [ ] no scope expansion without approval
 :END:
 
-${phaseTransitions}** Non-Goals
-:PROPERTIES:
-:NON-GOALS: t
-:END:
+- Goal :: ${projectName}
+- Context ::
+- Findings ::
+- Evidence ::
+- Next Actions ::
 
-- [ ] No manual optimization beyond defined scope
-- [ ] No opportunistic refactoring
-- [ ] No unrelated bug fixing
-- [ ] No scope expansion without user approval
-
-** Notes
-:PROPERTIES:
-:NOTES: t
-:END:
-
-Created by orchestrator-skill on ${new Date().toISOString()}
-
+${discoverySubtasks}
+${phaseGates}
 `;
 
       try {
@@ -465,9 +481,11 @@ Created by orchestrator-skill on ${new Date().toISOString()}
           content: [{ type: "text", text: `Created workflow at ${workflowPath}` }],
           details: {
             success: true,
-            message: "Workflow created successfully",
+            message: "Workflow created following schema from examples/schema.md",
             checkpoint: `📋 Created workflow: ${workflowPath}`,
             workflowPath: workflowPath,
+            projectId: projectIdFinal,
+            parentTaskId: parentId,
             phases: phaseList,
           },
         };

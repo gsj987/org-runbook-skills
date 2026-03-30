@@ -1,65 +1,125 @@
-#+TITLE: Project Runbook
-#+PROJECT: <project-name>
-#+CREATED: <created-date>
-#+PHASE: discovery
-#+STATUS: IN-PROGRESS
+#+title:      <project-name>
+#+date:       [<created-date>]
+#+filetags:   :project:
+#+identifier: <project-id>
+#+TODO:       TODO(t) IN-PROGRESS(i) | DONE(d) BLOCKED(b) CANCELLED(c)
 
-* Workflow Overview
+* Project: <project-name>
 :PROPERTIES:
 :PHASE: discovery
-:STATUS: IN-PROGRESS
 :END:
 
-** Project: <project-name>
+** IN-PROGRESS <overall coordination task>
 :PROPERTIES:
-:TASK-ID: <project-id>
+:ID: <parent-uuid>
+:OWNER: orchestrator
 :PHASE: discovery
-:STATUS: TODO
-:CREATED: <created-date>
+:CREATED: <ISO-timestamp>
+:UPDATED: <ISO-timestamp>
+:EXIT_CRITERIA:
+:  - [ ] <criterion 1>
+:  - [ ] <criterion 2>
+:NON-GOALS:
+:  - [ ] no <specific non-goal>
 :END:
 
-*** TODO Begin discovery phase
-    - Identify scope and objectives
-    - Gather initial requirements
-    - Document assumptions
+- Goal :: <one-sentence description>
+- Context :: <background, dependencies, constraints>
+- Findings ::
+- Evidence ::
+- Next Actions ::
+
+*** TODO <subtask A>
+:PROPERTIES:
+:ID: <child-uuid-a>
+:PARENT: <parent-uuid>
+:OWNER: <role-code>
+:PHASE: discovery
+:CREATED: <ISO-timestamp>
+:END:
+- Goal :: <goal>
+- Context ::
+- Findings ::
+- Evidence ::
+- Next Actions ::
+
+*** TODO <subtask B>
+:PROPERTIES:
+:ID: <child-uuid-b>
+:PARENT: <parent-uuid>
+:OWNER: <role-code>
+:PHASE: discovery
+:CREATED: <ISO-timestamp>
+:END:
+- Goal :: <goal>
+- Context ::
+- Findings ::
+- Evidence ::
+- Next Actions ::
 
 *** TODO Phase: discovery → design
-    - Exit criteria: Requirements documented
-    - Gate: PM approval
+:PROPERTIES:
+:ID: gate-discovery-design
+:PARENT: <parent-uuid>
+:OWNER: orchestrator
+:PHASE: discovery
+:EXIT_CRITERIA:
+:  - [ ] Requirements documented
+:END:
+- Gate :: PM approval required
+- Next Actions ::
+
+** Phase Gates
+:PROPERTIES:
+:PHASE_GATES: t
+:END:
 
 *** TODO Phase: design → implementation
-    - Exit criteria: Architecture approved
-    - Gate: Architecture review
+:PROPERTIES:
+:ID: gate-design-impl
+:PARENT: <parent-uuid>
+:OWNER: orchestrator
+:PHASE: design
+:EXIT_CRITERIA:
+:  - [ ] Architecture approved
+:END:
 
 *** TODO Phase: implementation → test
-    - Exit criteria: Feature complete
-    - Gate: Code review
+:PROPERTIES:
+:ID: gate-impl-test
+:PARENT: <parent-uuid>
+:OWNER: orchestrator
+:PHASE: implementation
+:EXIT_CRITERIA:
+:  - [ ] Feature complete
+:END:
 
 *** TODO Phase: test → integration
-    - Exit criteria: All tests passing
-    - Gate: QA sign-off
+:PROPERTIES:
+:ID: gate-test-integration
+:PARENT: <parent-uuid>
+:OWNER: orchestrator
+:PHASE: test
+:EXIT_CRITERIA:
+:  - [ ] All tests passing
+:END:
 
 *** TODO Phase: integration → deploy-check
-    - Exit criteria: Integration tests pass
-    - Gate: Release approval
+:PROPERTIES:
+:ID: gate-integration-deploy
+:PARENT: <parent-uuid>
+:OWNER: orchestrator
+:PHASE: integration
+:EXIT_CRITERIA:
+:  - [ ] Integration tests pass
+:END:
 
 *** TODO Phase: deploy-check → acceptance
-    - Exit criteria: Deployment verified
-    - Gate: Stakeholder acceptance
-
-** Non-Goals
 :PROPERTIES:
-:NON-GOALS: t
+:ID: gate-deploy-acceptance
+:PARENT: <parent-uuid>
+:OWNER: orchestrator
+:PHASE: deploy-check
+:EXIT_CRITERIA:
+:  - [ ] Deployment verified
 :END:
-
-- [ ] No manual optimization beyond defined scope
-- [ ] No opportunistic refactoring
-- [ ] No unrelated bug fixing
-- [ ] No scope expansion without user approval
-
-** Notes
-:PROPERTIES:
-:NOTES: t
-:END:
-
-Created by orchestrator on <created-date>
