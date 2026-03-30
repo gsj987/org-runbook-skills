@@ -1296,6 +1296,230 @@ WHEN TO USE:
     },
   });
 
+  // ls - List directory contents
+  pi.registerTool({
+    name: "ls",
+    label: "List Directory",
+    description: `List directory contents.
+
+USE WHEN:
+- Finding runbook files
+- Checking project structure
+- Locating workflow files
+
+PARAMETERS:
+- path: Directory to list (default: current directory)
+
+EXAMPLES:
+- ls() - list current directory
+- ls("runbook/") - list runbook directory
+- ls(".pi/extensions/") - list extensions`,
+    parameters: Type.Object({
+      path: Type.Optional(Type.String({ description: "Directory path to list (default: current directory)" })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const targetPath = (params.path as string) || process.cwd();
+      const absolutePath = path.isAbsolute(targetPath) ? targetPath : path.join(process.cwd(), targetPath);
+      
+      try {
+        const entries = fs.readdirSync(absolutePath, { withFileTypes: true });
+        const formatted = entries.map(e => {
+          const type = e.isDirectory() ? "📁" : "📄";
+          return `${type} ${e.name}`;
+        }).join("\n");
+        
+        return {
+          content: [{ type: "text", text: `${absolutePath}:\n${formatted}` }],
+          details: {
+            path: absolutePath,
+            entries: entries.map(e => ({ name: e.name, isDirectory: e.isDirectory() })),
+          },
+        };
+      } catch (error: any) {
+        throw new Error(`Failed to list directory: ${error.message}`);
+      }
+    },
+  });
+
+  // read - Read file contents
+  pi.registerTool({
+    name: "read",
+    label: "Read File",
+    description: `Read file contents.
+
+USE WHEN:
+- Reading workflow.org to understand project state
+- Checking task status
+- Reviewing findings and evidence
+
+PARAMETERS:
+- path: File path to read
+- offset: Line number to start (default: 1)
+- limit: Maximum lines to read (default: all)`,
+    parameters: Type.Object({
+      path: Type.String({ description: "File path to read" }),
+      offset: Type.Optional(Type.Number({ description: "Line number to start (default: 1)" })),
+      limit: Type.Optional(Type.Number({ description: "Maximum lines to read" })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { path: filePath, offset, limit } = params as { path: string; offset?: number; limit?: number };
+      const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(process.cwd(), filePath);
+      
+      try {
+        if (!fs.existsSync(absolutePath)) {
+          throw new Error(`File not found: ${absolutePath}`);
+        }
+        
+        const content = fs.readFileSync(absolutePath, "utf-8");
+        const lines = content.split("\n");
+        const start = (offset || 1) - 1;
+        const end = limit ? start + limit : lines.length;
+        const slice = lines.slice(start, end).join("\n");
+        
+        return {
+          content: [{ type: "text", text: slice }],
+          details: {
+            path: absolutePath,
+            totalLines: lines.length,
+            returnedLines: end - start,
+          },
+        };
+      } catch (error: any) {
+        throw new Error(`Failed to read file: ${error.message}`);
+      }
+    },
+  });
+
+  // grep - Search for pattern in files
+  pi.registerTool({
+    name: "grep",
+    label: "Search Pattern",
+    description: `Search for a pattern in files.
+
+USE WHEN:
+- Finding specific tasks or findings
+- Searching for TODO items
+- Locating patterns in workflow files
+
+PARAMETERS:
+- pattern: String or regex pattern to search for
+- path: Directory or file to search in (default: current directory)`,
+    parameters: Type.Object({
+      pattern: Type.String({ description: "Pattern to search for" }),
+      path: Type.Optional(Type.String({ description: "File or directory to search (default: current directory)" })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { pattern, path: searchPath } = params as { pattern: string; path?: string };
+      const targetPath = searchPath ? (path.isAbsolute(searchPath) ? searchPath : path.join(process.cwd(), searchPath)) : process.cwd();
+      
+      try {
+        const results: { file: string; line: number; content: string }[] = [];
+        
+        function searchDir(dir: string): void {
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              if (!entry.name.startsWith(".") && entry.name !== "node_modules") {
+                searchDir(fullPath);
+              }
+            } else if (entry.name.endsWith(".org") || entry.name.endsWith(".md")) {
+              try {
+                const content = fs.readFileSync(fullPath, "utf-8");
+                const lines = content.split("\n");
+                lines.forEach((line, idx) => {
+                  if (line.includes(pattern)) {
+                    results.push({
+                      file: fullPath,
+                      line: idx + 1,
+                      content: line.trim(),
+                    });
+                  }
+                });
+              } catch {}
+            }
+          }
+        }
+        
+        if (fs.statSync(targetPath).isDirectory()) {
+          searchDir(targetPath);
+        } else {
+          const content = fs.readFileSync(targetPath, "utf-8");
+          const lines = content.split("\n");
+          lines.forEach((line, idx) => {
+            if (line.includes(pattern)) {
+              results.push({
+                file: targetPath,
+                line: idx + 1,
+                content: line.trim(),
+              });
+            }
+          });
+        }
+        
+        const formatted = results.map(r => `${r.file}:${r.line}: ${r.content}`).join("\n");
+        return {
+          content: [{ type: "text", text: `Found ${results.length} matches:\n${formatted || "(none)"}` }],
+          details: { results },
+        };
+      } catch (error: any) {
+        throw new Error(`Failed to search: ${error.message}`);
+      }
+    },
+  });
+
+  // find - Find files by pattern
+  pi.registerTool({
+    name: "find",
+    label: "Find Files",
+    description: `Find files matching a pattern.
+
+USE WHEN:
+- Finding runbook files
+- Locating specific file types
+- Searching by name pattern
+
+PARAMETERS:
+- pattern: File name pattern (e.g., "*.org")
+- path: Directory to search (default: current directory)`,
+    parameters: Type.Object({
+      pattern: Type.String({ description: "File name pattern (e.g., *.org)" }),
+      path: Type.Optional(Type.String({ description: "Directory to search (default: current directory)" })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { pattern, path: searchPath } = params as { pattern: string; path?: string };
+      const targetPath = searchPath ? (path.isAbsolute(searchPath) ? searchPath : path.join(process.cwd(), searchPath)) : process.cwd();
+      
+      try {
+        const results: string[] = [];
+        const regex = new RegExp(pattern.replace(/\*/g, ".*").replace(/\?/g, "."));
+        
+        function searchDir(dir: string): void {
+          const entries = fs.readdirSync(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              if (!entry.name.startsWith(".") && entry.name !== "node_modules") {
+                searchDir(fullPath);
+              }
+            } else if (regex.test(entry.name)) {
+              results.push(fullPath);
+            }
+          }
+        }
+        
+        searchDir(targetPath);
+        
+        return {
+          content: [{ type: "text", text: `Found ${results.length} files:\n${results.join("\n") || "(none)"}` }],
+          details: { results },
+        };
+      } catch (error: any) {
+        throw new Error(`Failed to find files: ${error.message}`);
+      }
+    },
+  });
+
   pi.registerCommand("findings", {
     description: "Show local findings",
     handler: async (_args, ctx) => {
