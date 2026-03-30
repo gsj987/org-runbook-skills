@@ -11,6 +11,25 @@ version: 1.1
 
 > "Orchestrator is a state machine driver, not a domain executor."
 
+## Runtime Context
+
+**pi-adapter Extension:**
+Orchestrator runs with the pi-adapter extension which provides:
+- `worker.spawn` - Spawns sub-agents (code-agent, test-agent, etc.)
+- `worker.awaitResult` - Waits for worker completion
+- `worker.status` - Checks worker status
+
+**Supervisor Auto-Management:**
+The extension automatically:
+1. Checks if Supervisor is running before any worker.* call
+2. Auto-starts Supervisor on port 3847 if not running
+3. Handles connection failures gracefully
+
+**IMPORTANT:** Never call worker.* tools without waiting for Supervisor confirmation. The extension handles this, but if you see "404" errors, check Supervisor status manually with:
+```bash
+curl http://localhost:3847/health
+```
+
 ## Core Definition
 
 **Orchestrator Authority:**
