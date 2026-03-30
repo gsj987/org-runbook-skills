@@ -788,7 +788,7 @@ REQUIRED PARAMETERS:
 - workerId: The worker ID returned from worker.spawn
 
 OPTIONAL PARAMETERS:
-- timeout: Max seconds to wait (default: 300)`,
+- timeout: Max seconds to wait (default: 1800 = 30 minutes)`,
     parameters: Type.Object({
       workerId: Type.String({ description: "Worker ID to wait for" }),
       timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (default: 300)" })),
@@ -808,7 +808,7 @@ OPTIONAL PARAMETERS:
       try {
         const response = await supervisorRequest<{ success: boolean; result?: WorkerResult; error?: string }>(
           `/worker/${workerId}/await`,
-          { method: "POST", body: JSON.stringify({ timeout: timeout || 300 }) }
+          { method: "POST", body: JSON.stringify({ timeout: timeout || 1800 }) }
         );
 
         if (response.success && response.result) {
