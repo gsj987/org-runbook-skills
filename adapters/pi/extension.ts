@@ -922,6 +922,52 @@ OPTIONAL PARAMETERS:
     },
   });
 
+  pi.registerCommand("supervisor-status", {
+    description: "Show supervisor status and all active workers",
+    handler: async (_args, ctx) => {
+      // Check supervisor health
+      const supervisorOk = await checkSupervisorHealth();
+      if (!supervisorOk) {
+        ctx.ui.notify("⚠️ Supervisor not running. Use /supervisor-start to start it.", "warning");
+        return;
+      }
+
+      // Get workers and results
+      try {
+        const [workers, results] = await Promise.all([
+          supervisorRequest<{workers: string[]}>("/workers"),
+          supervisorRequest<{results: any[]}>("/results"),
+        ]);
+
+        const activeWorkers = workers.workers || [];
+        const completedResults = results.results || [];
+
+        // Build status message
+        let msg = `✅ Supervisor: running\n`;
+        msg += `📊 Active workers: ${activeWorkers.length}\n`;
+        msg += `📋 Completed results: ${completedResults.length}\n`;
+
+        if (activeWorkers.length > 0) {
+          msg += `\n🔄 Active:\n`;
+          for (const wid of activeWorkers) {
+            msg += `  - ${wid}\n`;
+          }
+        }
+
+        if (completedResults.length > 0) {
+          msg += `\n✅ Recent completed:\n`;
+          for (const r of completedResults.slice(-5)) {
+            msg += `  - ${r.workerId} (${r.role}, exit:${r.exitCode})\n`;
+          }
+        }
+
+        ctx.ui.notify(msg, "info");
+      } catch (error) {
+        ctx.ui.notify(`Failed to get supervisor status: ${error}`, "error");
+      }
+    },
+  });
+
   pi.registerCommand("findings", {
     description: "Show local findings",
     handler: async (_args, ctx) => {
