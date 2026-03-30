@@ -106,7 +106,24 @@ When orchestrator starts a new project:
 | File | Purpose |
 |------|---------|
 | `deploy.sh` | Deployment script |
-| `runbook/000-runbook-template.org` | Runbook template |
+| `runbook/000-runbook-template.org` | Runbook template (see [[file:examples/schema.md][schema.md]] for format) |
+| `examples/schema.md` | Formal schema definition for org files |
 | `.pi/` | Runtime directory (not in git) |
 | `.pi/skills/` | Deployed skills |
-| `.pi/extensions/pi-adapter/` | Supervisor extension |
+| `.pi/extensions/pi-adapter/` | Supervisor extension (no compilation needed, uses npx ts-node) |
+
+## Development Notes
+
+### pi-adapter Extension
+- **No compilation required** - runs via `npx ts-node --esm`
+- Source: `adapters/pi/extension.ts` and `protocol.ts`
+- Supervisor auto-starts on port 3847 when not running
+- Workers spawn as child processes of supervisor
+
+### Schema Compliance
+All workflow.org files must follow the schema defined in [[file:examples/schema.md][examples/schema.md]]:
+- Use `#+TODO:` header line with keywords
+- Tasks use TODO keywords (TODO/IN-PROGRESS/DONE/BLOCKED)
+- Findings: `F-<uuid>` with ratings (★★★/★★/★)
+- Evidence: `E-<uuid>` must link to Finding
+- See [[file:examples/schema.md][schema.md]] for full object definitions
