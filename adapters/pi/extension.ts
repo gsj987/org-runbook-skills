@@ -983,35 +983,13 @@ WHEN TO USE:
   // ============================================================
 
   pi.on("session_shutdown", async () => {
+    // Save findings before exit
     saveLocalFindings();
     
-    // Cleanup supervisor if we started it - but check workers first
-    if (supervisorStartedByThis && supervisorProcess) {
-      try {
-        // Check if there are still workers running before killing supervisor
-        const status = await checkSupervisorHealth().catch(() => false);
-        if (status) {
-          const workersResult = await supervisorRequest<{workers: string[]}>("/workers").catch(() => ({workers: []}));
-          const workerCount = workersResult.workers?.length || 0;
-          
-          if (workerCount > 0) {
-            console.log(`[${INSTANCE_ID}] 🛑 Supervisor has ${workerCount} active workers, not killing`);
-            // Don't kill supervisor - other sessions depend on it
-            return;
-          }
-        }
-        
-        console.log(`[${INSTANCE_ID}] 🛑 Cleaning up auto-started supervisor...`);
-        // On Unix, we can kill the entire process group
-        if (process.platform !== "win32") {
-          process.kill(-supervisorProcess.pid!, "SIGTERM");
-        } else {
-          supervisorProcess.kill("SIGTERM");
-        }
-      } catch (err) {
-        console.warn(`[${INSTANCE_ID}] ⚠️ Failed to cleanup supervisor: ${err}`);
-      }
-    }
+    // DON'T kill supervisor - it may have other workers running
+    // or completed workers whose results need to be retrieved.
+    // Supervisor will continue running and be reused by next session.
+    // To kill manually: fuser -k 3847/tcp
   });
 
   // Save findings on exit - MUST be beforeExit to allow async operations
