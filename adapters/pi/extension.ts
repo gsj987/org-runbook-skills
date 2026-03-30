@@ -235,8 +235,8 @@ async function startSupervisor(): Promise<boolean> {
   console.log(`🚀 Auto-starting supervisor from: ${protocolPath}`);
 
   return new Promise((resolve) => {
-    // Use pipe for stdio so we can capture output
-    supervisorProcess = spawn("npx", ["ts-node", "--esm", protocolPath], {
+    // Use shell to start supervisor - more reliable across environments
+    supervisorProcess = spawn("bash", ["-c", `cd "${path.dirname(protocolPath)}" && npx ts-node --esm "${path.basename(protocolPath)}"`], {
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
@@ -245,40 +245,15 @@ async function startSupervisor(): Promise<boolean> {
       detached: true,
     });
 
-    let started = false;
+    supervisorProcess.unref();  // Don't wait for this process
 
-    supervisorProcess.stdout?.on("data", (data: Buffer) => {
-      const output = data.toString();
-      if (!started && output.includes("3847")) {
-        started = true;
-        supervisorStartedByThis = true;
-        console.log("✅ Supervisor auto-started");
-        resolve(true);
-      }
-    });
-
-    supervisorProcess.stderr?.on("data", (data: Buffer) => {
-      // Ignore warnings
-    });
-
-    supervisorProcess.on("error", (err) => {
-      console.error(`❌ Failed to start supervisor: ${err}`);
-      resolve(false);
-    });
-
-    // Unref so parent doesn't wait for child
-    supervisorProcess.unref();
-
-    // Poll for health check instead of relying on stdout
+    // Poll for health check until supervisor is ready
     const pollInterval = setInterval(async () => {
       try {
-        await supervisorRequest("/health");
-        if (!started) {
-          started = true;
-          supervisorStartedByThis = true;
-          console.log("✅ Supervisor auto-started (confirmed by health check)");
-        }
+        const response = await supervisorRequest<{status: string}>("/health");
         clearInterval(pollInterval);
+        supervisorStartedByThis = true;
+        console.log("✅ Supervisor auto-started");
         resolve(true);
       } catch {
         // Still waiting
@@ -288,10 +263,8 @@ async function startSupervisor(): Promise<boolean> {
     // Timeout after 30 seconds
     setTimeout(() => {
       clearInterval(pollInterval);
-      if (!started) {
-        console.warn("⚠️ Supervisor start timeout");
-        resolve(false);
-      }
+      console.warn("⚠️ Supervisor start timeout");
+      resolve(false);
     }, 30000);
   });
 }
