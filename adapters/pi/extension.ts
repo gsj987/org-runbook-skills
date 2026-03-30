@@ -985,10 +985,23 @@ WHEN TO USE:
   pi.on("session_shutdown", async () => {
     saveLocalFindings();
     
-    // Cleanup supervisor if we started it
+    // Cleanup supervisor if we started it - but check workers first
     if (supervisorStartedByThis && supervisorProcess) {
-      console.log("🛑 Cleaning up auto-started supervisor...");
       try {
+        // Check if there are still workers running before killing supervisor
+        const status = await checkSupervisorHealth().catch(() => false);
+        if (status) {
+          const workersResult = await supervisorRequest<{workers: string[]}>("/workers").catch(() => ({workers: []}));
+          const workerCount = workersResult.workers?.length || 0;
+          
+          if (workerCount > 0) {
+            console.log(`[${INSTANCE_ID}] 🛑 Supervisor has ${workerCount} active workers, not killing`);
+            // Don't kill supervisor - other sessions depend on it
+            return;
+          }
+        }
+        
+        console.log(`[${INSTANCE_ID}] 🛑 Cleaning up auto-started supervisor...`);
         // On Unix, we can kill the entire process group
         if (process.platform !== "win32") {
           process.kill(-supervisorProcess.pid!, "SIGTERM");
@@ -996,7 +1009,7 @@ WHEN TO USE:
           supervisorProcess.kill("SIGTERM");
         }
       } catch (err) {
-        console.warn(`⚠️ Failed to cleanup supervisor: ${err}`);
+        console.warn(`[${INSTANCE_ID}] ⚠️ Failed to cleanup supervisor: ${err}`);
       }
     }
   });
