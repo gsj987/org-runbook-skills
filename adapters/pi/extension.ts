@@ -170,6 +170,9 @@ let supervisorStartedByThis: boolean = false;
 // Supervisor Management
 // ============================================================
 
+// Unique ID for this extension instance (for debugging)
+const INSTANCE_ID = Math.random().toString(36).substr(2, 6);
+
 async function checkSupervisorHealth(): Promise<boolean> {
   try {
     await supervisorRequest("/health");
@@ -177,6 +180,17 @@ async function checkSupervisorHealth(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function ensureSupervisorRunning(): Promise<boolean> {
+  // Check if supervisor is already running
+  if (await checkSupervisorHealth()) {
+    console.log(`[${INSTANCE_ID}] ✅ Supervisor already running`);
+    return true;
+  }
+
+  console.log(`[${INSTANCE_ID}] ⚠️ Supervisor not running, attempting auto-start...`);
+  return await startSupervisor();
 }
 
 async function supervisorRequest<T>(
@@ -278,17 +292,6 @@ async function startSupervisor(): Promise<boolean> {
       resolve(false);
     }, 30000);
   });
-}
-
-async function ensureSupervisorRunning(): Promise<boolean> {
-  // Check if supervisor is already running
-  if (await checkSupervisorHealth()) {
-    console.log("✅ Supervisor already running");
-    return true;
-  }
-
-  console.log("⚠️ Supervisor not running, attempting auto-start...");
-  return await startSupervisor();
 }
 
 // ============================================================
