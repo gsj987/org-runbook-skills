@@ -6,5 +6,8 @@
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
     "express": "^4.22.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
   }
 }
