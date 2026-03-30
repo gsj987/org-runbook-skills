@@ -219,6 +219,71 @@ When orchestrator detects anomaly, MUST produce:
 
 ---
 
+## Available Tools for Orchestrator
+
+Orchestrator has access to these tools via the pi-adapter extension:
+
+### Worker Management
+```
+supervisor.getStatus()
+  → Returns: { supervisor, activeWorkers[], completedResults[] }
+  → Use before spawn to ensure supervisor is healthy
+  → Use after failures to debug
+
+worker.spawn(role, task, taskId, workflowPath)
+  → Spawns a worker agent
+  → Returns: { success, workerId, statusUrl }
+  → IMPORTANT: Note the workerId for awaitResult
+
+worker.awaitResult(workerId, timeout?)
+  → Waits for worker to complete
+  → Returns: { success, result: { findings, artifacts, exitCode } }
+  → workerId must match value from spawn
+
+worker.status(workerId)
+  → Returns: { status, workerId, result? }
+  → Status: "running" | "completed"
+```
+
+### Workflow Management
+```
+workflow.init(workflowPath, projectName, projectId?, phases?)
+  → Creates new workflow.org file
+  → workflowPath should be: "runbook/<sequence>-<project>.org"
+
+workflow.claimTask(taskId, strategy?)
+  → Claims task for current role
+  → Requires task status = TODO
+
+workflow.appendFinding(taskId, content, rating)
+  → Adds finding to task
+  → Rating: "★★★" | "★★" | "★"
+
+workflow.attachEvidence(taskId, findingId, evidence)
+  → Links evidence to finding
+
+workflow.setStatus(taskId, status)
+  → Sets task status: TODO | IN-PROGRESS | DONE | BLOCKED
+
+workflow.advancePhase(parentTaskId, nextPhase)
+  → Advances project to next phase
+  → Requires all phase tasks complete
+```
+
+### File Operations
+```
+read(path)
+grep(pattern, path?)
+find(pattern, path?)
+ls(path?)
+```
+
+### Debugging
+- If worker.awaitResult returns 404: supervisor may still be starting, try again
+- Use supervisor.getStatus() to check supervisor health and active workers
+
+---
+
 ## Fallback Rules
 
 Orchestrator MAY perform domain work ONLY when:

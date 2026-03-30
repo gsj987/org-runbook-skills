@@ -96,6 +96,7 @@ const ROLE_TOOLS: Record<string, string[]> = {
     "worker.spawn",
     "worker.awaitResult",
     "worker.status",
+    "supervisor.getStatus",
     "read",
     "grep",
     "find",
@@ -922,48 +923,47 @@ OPTIONAL PARAMETERS:
     },
   });
 
-  pi.registerCommand("supervisor-status", {
-    description: "Show supervisor status and all active workers",
-    handler: async (_args, ctx) => {
-      // Check supervisor health
+  // supervisor.getStatus - Get supervisor and worker status
+  pi.registerTool({
+    name: "supervisor.getStatus",
+    label: "Get Supervisor Status",
+    description: `Get the current status of the supervisor and all workers.
+
+RETURNS:
+- supervisor: running | not_running
+- activeWorkers: list of worker IDs currently running
+- completedResults: list of recent completed workers with their results
+
+WHEN TO USE:
+- Before spawning workers to check supervisor is healthy
+- After spawn failures to debug
+- Before awaitResult to check if worker completed`,
+    parameters: Type.Object({}),
+    execute: async () => {
       const supervisorOk = await checkSupervisorHealth();
       if (!supervisorOk) {
-        ctx.ui.notify("⚠️ Supervisor not running. Use /supervisor-start to start it.", "warning");
-        return;
+        return {
+          content: [{ type: "text", text: "Supervisor not running" }],
+          details: { supervisor: "not_running", activeWorkers: [], completedResults: [] },
+        };
       }
 
-      // Get workers and results
       try {
         const [workers, results] = await Promise.all([
           supervisorRequest<{workers: string[]}>("/workers"),
           supervisorRequest<{results: any[]}>("/results"),
         ]);
 
-        const activeWorkers = workers.workers || [];
-        const completedResults = results.results || [];
-
-        // Build status message
-        let msg = `✅ Supervisor: running\n`;
-        msg += `📊 Active workers: ${activeWorkers.length}\n`;
-        msg += `📋 Completed results: ${completedResults.length}\n`;
-
-        if (activeWorkers.length > 0) {
-          msg += `\n🔄 Active:\n`;
-          for (const wid of activeWorkers) {
-            msg += `  - ${wid}\n`;
-          }
-        }
-
-        if (completedResults.length > 0) {
-          msg += `\n✅ Recent completed:\n`;
-          for (const r of completedResults.slice(-5)) {
-            msg += `  - ${r.workerId} (${r.role}, exit:${r.exitCode})\n`;
-          }
-        }
-
-        ctx.ui.notify(msg, "info");
+        return {
+          content: [{ type: "text", text: `Supervisor running. Active: ${workers.workers?.length || 0}, Completed: ${results.results?.length || 0}` }],
+          details: {
+            supervisor: "running",
+            activeWorkers: workers.workers || [],
+            completedResults: results.results || [],
+          },
+        };
       } catch (error) {
-        ctx.ui.notify(`Failed to get supervisor status: ${error}`, "error");
+        throw new Error(`Failed to get supervisor status: ${error}`);
       }
     },
   });
