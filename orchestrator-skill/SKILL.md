@@ -301,15 +301,41 @@ workflow.advancePhase(parentTaskId, nextPhase)
   → Requires all phase tasks complete
 ```
 
-### File Operations
+### File & Git Operations
 ```
-read(path)
-grep(pattern, path?)
-find(pattern, path?)
 ls(path?)
+  → List directory contents
+  → If path omitted, lists current directory
+  → Use: Find runbook files, check project structure
+  → Example: ls("runbook/") to see all runbooks
+
+read(path)
+  → Read file contents
+  → Use: Read workflow.org to understand project state
+
+git.status()
+  → Show git repository status
+  → Use: Check for uncommitted changes before/after work
+  → Returns: Modified, staged, untracked files, current branch
+
+grep(pattern, path?)
+  → Search for pattern in files
+  → Use: Find specific tasks, findings, or patterns
+
+find(pattern, path?)
+  → Find files matching pattern
+  → Use: Locate runbook files by name
 ```
 
-### Debugging
+### Debugging Tips
+```
+- Find runbooks: ls("runbook/") or find("*.org", "runbook/")
+- Check workflow: read("runbook/<name>.org")
+- Verify changes: git.status()
+- Debug supervisor: supervisor.getLog({ lines: 20 })
+- Check worker: worker.status(workerId)
+- Worker stuck? worker.kill(workerId) then respawn
+```
 - If worker.awaitResult returns 404: supervisor may still be starting, try again
 - Use supervisor.getStatus() to check supervisor health and active workers
 

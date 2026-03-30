@@ -278,7 +278,10 @@ function spawnWorker(config: SpawnRequest, workerId: string): ChildProcess {
   log(`🚀 Spawning ${role} worker (${workerId})`);
 
   const protocolDir = __dirname;
-  const cwd = path.join(protocolDir, "..", "..");
+  // cwd should be project root, which is 3 levels up from .pi/extensions/pi-adapter/
+  const cwd = path.join(protocolDir, "..", "..", "..");
+  
+  log(`   Worker working directory: ${cwd}`);
   
   const worker = spawn(PI_COMMAND, args, {
     stdio: ["ignore", "pipe", "pipe"],

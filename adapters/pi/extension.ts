@@ -101,6 +101,7 @@ const ROLE_TOOLS: Record<string, string[]> = {
     "worker.getLog",
     "supervisor.getStatus",
     "supervisor.getLog",
+    "git.status",
     "read",
     "grep",
     "find",
@@ -1021,6 +1022,52 @@ EXAMPLES:
       } catch (error) {
         throw new Error(`Failed to get worker log: ${error}`);
       }
+    },
+  });
+
+  // git.status
+  pi.registerTool({
+    name: "git.status",
+    label: "Git Status",
+    description: `Run git status to see the current state of the repository.
+
+USE WHEN:
+- You want to see modified, staged, and untracked files
+- Before making changes to understand the current state
+- After making changes to verify what was modified
+- Checking for uncommitted changes
+
+RETURNS:
+- List of modified files
+- List of staged files
+- List of untracked files
+- Current branch name
+- Whether repo is clean or has changes
+
+EXAMPLES:
+- git.status() - See full git status`,
+    parameters: Type.Object({}),
+    execute: async (_toolCallId, _params) => {
+      return new Promise((resolve, reject) => {
+        const { execSync } = require("child_process");
+        try {
+          const cwd = process.cwd();
+          const output = execSync("git status", { cwd, encoding: "utf-8" });
+          resolve({
+            content: [{ type: "text", text: output }],
+            details: { success: true, output },
+          });
+        } catch (error: any) {
+          if (error.status === 128) {
+            resolve({
+              content: [{ type: "text", text: "Not a git repository" }],
+              details: { success: false, error: "Not a git repository" },
+            });
+          } else {
+            reject(new Error(`Git status failed: ${error.message}`));
+          }
+        }
+      });
     },
   });
 
