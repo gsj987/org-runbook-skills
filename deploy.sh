@@ -202,6 +202,9 @@ deploy_adapter() {
     # Copy extension as index.ts (pi auto-discovers from subdirectory index)
     cp -f "$source_dir/extension.ts" "$target_dir/index.ts"
     
+    # Copy protocol.ts (supervisor needs this to start workers)
+    cp -f "$source_dir/protocol.ts" "$target_dir/"
+    
     # Copy package.json and install dependencies
     cp -f "$source_dir/package.json" "$target_dir/"
     
