@@ -36,7 +36,10 @@ After deployment, use these in any pi session:
 
 1. **All runbooks MUST be in `runbook/` directory**
 2. **Naming: `runbook/<sequence>-<project-name>.org`**
-3. **Sequence numbers start from 001**
+3. **Sequence numbers MUST be sequential (001, 002, 003...)**
+   - Check existing runbooks first, use next available number
+   - Never skip numbers or reuse deleted numbers
+   - This ensures deterministic ordering
 4. **Never create `workflow.org` at root level**
 
 ### Directory Structure
