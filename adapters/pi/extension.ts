@@ -182,19 +182,29 @@ async function supervisorRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(`${SUPERVISOR_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
-  });
+  try {
+    const response = await fetch(`${SUPERVISOR_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(`Supervisor error: ${response.status} ${response.statusText}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        throw new Error(`Supervisor: worker not found (may still be starting). Try again in a few seconds.`);
+      }
+      throw new Error(`Supervisor error: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.json() as T;
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      throw new Error(`Supervisor not ready (may still be starting). Auto-starting... Try again in a few seconds.`);
+    }
+    throw error;
   }
-
-  return await response.json() as T;
 }
 
 function findProtocolScript(): string | null {
