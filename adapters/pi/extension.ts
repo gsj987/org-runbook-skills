@@ -290,12 +290,12 @@ async function startSupervisor(): Promise<boolean> {
       }
     }, 1000);
 
-    // Timeout after 30 seconds
+    // Timeout after 60 seconds (npx ts-node needs time to compile)
     setTimeout(() => {
       clearInterval(pollInterval);
       console.warn("⚠️ Supervisor start timeout");
       resolve(false);
-    }, 30000);
+    }, 60000);
   });
 }
 
