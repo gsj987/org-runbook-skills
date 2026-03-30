@@ -123,6 +123,37 @@ When orchestrator starts a new project:
 - Supervisor auto-starts on port 3847 when not running
 - Workers spawn as child processes of supervisor
 
+### Testing Changes to pi-adapter (MANDATORY)
+
+**Before committing any changes to `adapters/pi/extension.ts` or `protocol.ts`, you MUST run this E2E test:**
+
+```bash
+# 1. Stop any running supervisor
+fuser -k 3847/tcp 2>/dev/null; rm -f ~/.pi-adapter-supervisor.pid
+
+# 2. Clean deploy
+rm -rf .pi && ./deploy.sh --project .
+
+# 3. Start supervisor
+cd adapters/pi && npx ts-node --esm protocol.ts &
+sleep 5
+
+# 4. Run E2E test in pi
+pi -p
+# Then use worker.spawn to spawn an ops-agent that runs "echo hello"
+# Then use worker.awaitResult to get the result
+
+# 5. Verify:
+# - worker.spawn returns Worker ID
+# - Worker completes
+# - worker.awaitResult returns the result
+```
+
+**Why this is required:**
+- The pi-adapter has many subtle timing issues (supervisor startup, worker registration, etc.)
+- curl tests don't catch issues visible only when pi loads the extension
+- Silent failures can break orchestrator sessions in production
+
 ### Schema Compliance
 All workflow.org files must follow the schema defined in [[file:examples/schema.md][examples/schema.md]]:
 - Use `#+TODO:` header line with keywords
