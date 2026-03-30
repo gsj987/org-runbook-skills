@@ -235,8 +235,9 @@ async function startSupervisor(): Promise<boolean> {
   console.log(`🚀 Auto-starting supervisor from: ${protocolPath}`);
 
   return new Promise((resolve) => {
-    supervisorProcess = spawn("npx", ["ts-node", protocolPath], {
-      stdio: "pipe",
+    // Use pipe for stdio so we can capture output
+    supervisorProcess = spawn("npx", ["ts-node", "--esm", protocolPath], {
+      stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
         PI_SUPERVISOR_PORT: String(SUPERVISOR_PORT),
@@ -248,19 +249,16 @@ async function startSupervisor(): Promise<boolean> {
 
     supervisorProcess.stdout?.on("data", (data: Buffer) => {
       const output = data.toString();
-      console.log(`[supervisor] ${output}`);
-      
-      // Look for startup confirmation
-      if (!started && output.includes("listening") || output.includes("server ready") || output.includes("3847")) {
+      if (!started && output.includes("3847")) {
         started = true;
         supervisorStartedByThis = true;
-        console.log("✅ Supervisor auto-started successfully");
+        console.log("✅ Supervisor auto-started");
         resolve(true);
       }
     });
 
     supervisorProcess.stderr?.on("data", (data: Buffer) => {
-      console.error(`[supervisor:err] ${data.toString()}`);
+      // Ignore warnings
     });
 
     supervisorProcess.on("error", (err) => {
@@ -268,13 +266,31 @@ async function startSupervisor(): Promise<boolean> {
       resolve(false);
     });
 
+    // Unref so parent doesn't wait for child
+    supervisorProcess.unref();
+
+    // Poll for health check instead of relying on stdout
+    const pollInterval = setInterval(async () => {
+      try {
+        await supervisorRequest("/health");
+        if (!started) {
+          started = true;
+          supervisorStartedByThis = true;
+          console.log("✅ Supervisor auto-started (confirmed by health check)");
+        }
+        clearInterval(pollInterval);
+        resolve(true);
+      } catch {
+        // Still waiting
+      }
+    }, 1000);
+
     // Timeout after 30 seconds
     setTimeout(() => {
+      clearInterval(pollInterval);
       if (!started) {
-        console.warn("⚠️ Supervisor start timeout, assuming it started...");
-        started = true;
-        supervisorStartedByThis = true;
-        resolve(true);
+        console.warn("⚠️ Supervisor start timeout");
+        resolve(false);
       }
     }, 30000);
   });
