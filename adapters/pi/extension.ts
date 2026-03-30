@@ -96,7 +96,11 @@ const ROLE_TOOLS: Record<string, string[]> = {
     "worker.spawn",
     "worker.awaitResult",
     "worker.status",
+    "worker.getOutput",
+    "worker.kill",
+    "worker.getLog",
     "supervisor.getStatus",
+    "supervisor.getLog",
     "read",
     "grep",
     "find",
@@ -860,6 +864,280 @@ OPTIONAL PARAMETERS:
         };
       } catch (error) {
         throw new Error(`Failed to get status: ${error}`);
+      }
+    },
+  });
+
+  // ============================================================
+  // Debug/Log Tools (for Orchestrator)
+  // ============================================================
+
+  // supervisor.getLog
+  pi.registerTool({
+    name: "supervisor.getLog",
+    label: "Get Supervisor Log",
+    description: `Read supervisor log file to diagnose issues.
+
+USE WHEN:
+- You encounter 408 timeout errors
+- Worker spawn fails unexpectedly
+- Supervisor seems unresponsive
+- You need to debug multi-agent coordination issues
+- You want to see request timing, worker spawn/exit, errors
+
+PARAMETERS:
+- lines: Number of lines to read (default: 50, max: 500)
+- date: Date to read log for (default: today, format: YYYY-MM-DD)
+
+EXAMPLES:
+- After awaitResult timeout: Check log to see if worker exited or is hung
+- After spawn failure: Check log for error details
+- Read yesterday's log: { date: "2026-03-29", lines: 100 }`,
+    parameters: Type.Object({
+      lines: Type.Optional(Type.Number({ description: "Number of lines to read (default: 50, max: 500)" })),
+      date: Type.Optional(Type.String({ description: "Date to read log for (format: YYYY-MM-DD, default: today)" })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const lines = Math.min((params.lines as number) || 50, 500);
+      const date = (params.date as string) || new Date().toISOString().slice(0, 10);
+      
+      try {
+        // Read the specified day's log file
+        const logFile = path.join(process.env.HOME || "/tmp", ".pi-adapter", "logs", `supervisor-${date}.log`);
+        
+        if (!fs.existsSync(logFile)) {
+          // Try to list available log files
+          const logsDir = path.join(process.env.HOME || "/tmp", ".pi-adapter", "logs");
+          let availableDates = [];
+          if (fs.existsSync(logsDir)) {
+            availableDates = fs.readdirSync(logsDir)
+              .filter(f => f.startsWith("supervisor-") && f.endsWith(".log"))
+              .map(f => f.replace("supervisor-", "").replace(".log", ""))
+              .sort()
+              .reverse();
+          }
+          return {
+            content: [{ type: "text", text: `No supervisor log found for ${date}. Available dates: ${availableDates.join(", ") || "none"}` }],
+            details: { date, logFile, lines: 0, availableDates },
+          };
+        }
+        
+        const content = fs.readFileSync(logFile, "utf-8");
+        const allLines = content.split("\n").filter(l => l.trim());
+        const lastLines = allLines.slice(-lines);
+        
+        return {
+          content: [{ type: "text", text: `Supervisor log for ${date} (last ${lastLines.length} lines):\n\`\`\`\n${lastLines.join("\n")}\n\`\`\`` }],
+          details: {
+            date,
+            logFile,
+            totalLines: allLines.length,
+            returnedLines: lastLines.length,
+            entries: lastLines,
+          },
+        };
+      } catch (error) {
+        throw new Error(`Failed to read supervisor log: ${error}`);
+      }
+    },
+  });
+
+  // worker.getLog
+  pi.registerTool({
+    name: "worker.getLog",
+    label: "Get Worker Log",
+    description: `Get stdout/stderr output from a worker via supervisor API.
+
+USE WHEN:
+- Worker is taking too long, want to see what it's doing
+- Worker failed, want to see error output
+- Worker completed but you need to see its output
+- Diagnosing why worker is stuck or behaving unexpectedly
+
+RETURNS:
+- Worker stdout buffer (up to 2000 chars in response, full in details)
+- Worker stderr buffer
+- Output length (to detect excessive output)
+- Status: "running" or "completed"
+
+NOTE: Works for both running workers AND completed workers (results are persisted to disk).
+
+EXAMPLES:
+- Check progress: worker.getLog({ workerId: "worker-xxx" })
+- Full output: Check details.stdout in response`,
+    parameters: Type.Object({
+      workerId: Type.String({ description: "Worker ID to get log from" }),
+      tail: Type.Optional(Type.Number({ description: "Number of lines to tail from end (default: all)" })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { workerId, tail } = params as { workerId: string; tail?: number };
+
+      // Ensure supervisor is running
+      if (!await checkSupervisorHealth()) {
+        const started = await ensureSupervisorRunning();
+        if (!started) {
+          throw new Error(`Supervisor not available on ${SUPERVISOR_URL}. Could not auto-start.`);
+        }
+      }
+
+      try {
+        const response = await supervisorRequest<{
+          workerId: string;
+          status: "running" | "completed";
+          stdout: string;
+          stderr: string;
+          stdoutLength: number;
+          stderrLength: number;
+        }>(`/worker/${workerId}/output`);
+
+        // Apply tail if specified
+        let stdout = response.stdout;
+        let stderr = response.stderr;
+        
+        if (tail && tail > 0) {
+          const stdoutLines = stdout.split("\n");
+          const stderrLines = stderr.split("\n");
+          stdout = stdoutLines.slice(-tail).join("\n");
+          stderr = stderrLines.slice(-tail).join("\n");
+        }
+
+        const stdoutDisplay = stdout.slice(-2000);
+        const stderrDisplay = stderr.slice(-2000);
+
+        return {
+          content: [{ 
+            type: "text", 
+            text: `Worker ${workerId} (${response.status}) output:\n\nSTDOUT (${response.stdoutLength} chars):\n\`\`\`\n${stdoutDisplay}\n\`\`\`\n\nSTDERR (${response.stderrLength} chars):\n\`\`\`\n${stderrDisplay}\n\`\`\`` 
+          }],
+          details: {
+            workerId,
+            status: response.status,
+            stdoutLength: response.stdoutLength,
+            stderrLength: response.stderrLength,
+            stdout: response.stdout,  // Full output in details
+            stderr: response.stderr,  // Full output in details
+          },
+        };
+      } catch (error) {
+        throw new Error(`Failed to get worker log: ${error}`);
+      }
+    },
+  });
+
+  // worker.getOutput
+  pi.registerTool({
+    name: "worker.getOutput",
+    label: "Get Worker Output",
+    description: `Get stdout/stderr output from a running or completed worker.
+
+USE WHEN:
+- Worker is taking too long, want to see what it's doing
+- Worker failed, want to see error output
+- Diagnosing why worker is hung
+
+RETURNS:
+- Worker stdout buffer
+- Worker stderr buffer  
+- Output length (to detect excessive output)`,
+    parameters: Type.Object({
+      workerId: Type.String({ description: "Worker ID to get output from" }),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { workerId } = params as { workerId: string };
+
+      // Ensure supervisor is running
+      if (!await checkSupervisorHealth()) {
+        const started = await ensureSupervisorRunning();
+        if (!started) {
+          throw new Error(`Supervisor not available on ${SUPERVISOR_URL}. Could not auto-start.`);
+        }
+      }
+
+      try {
+        const response = await supervisorRequest<{
+          workerId: string;
+          stdout: string;
+          stderr: string;
+          stdoutLength: number;
+          stderrLength: number;
+        }>(`/worker/${workerId}/output`);
+
+        return {
+          content: [{ 
+            type: "text", 
+            text: `Worker ${workerId} output:\n\nSTDOUT (${response.stdoutLength} chars):\n\`\`\`\n${response.stdout.slice(-2000)}\n\`\`\`\n\nSTDERR (${response.stderrLength} chars):\n\`\`\`\n${response.stderr.slice(-2000)}\n\`\`\`` 
+          }],
+          details: {
+            workerId,
+            stdoutLength: response.stdoutLength,
+            stderrLength: response.stderrLength,
+            stdout: response.stdout,
+            stderr: response.stderr,
+          },
+        };
+      } catch (error) {
+        throw new Error(`Failed to get worker output: ${error}`);
+      }
+    },
+  });
+
+  // worker.kill
+  pi.registerTool({
+    name: "worker.kill",
+    label: "Kill Worker",
+    description: `Force kill a hung worker process.
+
+USE WHEN:
+- Worker.awaitResult returns 408 timeout
+- Worker has been running for too long
+- Worker is clearly stuck (e.g., waiting for input)
+- You need to restart a worker with new parameters
+
+AFTER KILLING:
+- Worker process will be terminated (SIGTERM, then SIGKILL after 5s)
+- Result will NOT be available
+- Spawn a new worker if needed
+
+CAUTION:
+- Worker will be forcefully terminated
+- Any in-progress work will be lost
+- Always check worker.getOutput first to understand the situation`,
+    parameters: Type.Object({
+      workerId: Type.String({ description: "Worker ID to kill" }),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { workerId } = params as { workerId: string };
+
+      // Ensure supervisor is running
+      if (!await checkSupervisorHealth()) {
+        const started = await ensureSupervisorRunning();
+        if (!started) {
+          throw new Error(`Supervisor not available on ${SUPERVISOR_URL}. Could not auto-start.`);
+        }
+      }
+
+      try {
+        const response = await supervisorRequest<{
+          success: boolean;
+          message: string;
+          note: string;
+        }>(`/worker/${workerId}`, { method: "DELETE" });
+
+        return {
+          content: [{ 
+            type: "text", 
+            text: `Worker ${workerId} kill signal sent: ${response.message}\n${response.note}` 
+          }],
+          details: {
+            success: response.success,
+            workerId,
+            message: response.message,
+            note: response.note,
+            checkpoint: `🛑 Killed worker: ${workerId}`,
+          },
+        };
+      } catch (error) {
+        throw new Error(`Failed to kill worker: ${error}`);
       }
     },
   });

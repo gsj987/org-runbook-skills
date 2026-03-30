@@ -245,6 +245,37 @@ worker.status(workerId)
   → Status: "running" | "completed"
 ```
 
+### Worker Lifecycle Management (Kill & Restart)
+```
+worker.kill(workerId)
+  → Force kill a hung worker process
+  → Use when: awaitResult returns 408 timeout, worker is stuck
+  → CAUTION: In-progress work will be lost
+  → AFTER KILL: Spawn a new worker if needed
+
+worker.restart(workerId, newTask?)
+  → Kill existing worker and prepare for restart
+  → Note: You need to spawn a new worker after this
+  → Use when: Worker needs fresh start with same or modified task
+```
+
+### Debugging & Logging
+```
+supervisor.getLog(lines?, date?)
+  → Read supervisor log file
+  → lines: Number of lines (default: 50, max: 500)
+  → date: YYYY-MM-DD format (default: today)
+  → Returns: Request timing, worker spawn/exit, errors
+  → Use when: Debugging timeouts, spawn failures, coordination issues
+
+worker.getLog(workerId, tail?)
+  → Get stdout/stderr from worker
+  → Works for: running workers AND completed workers (persisted to disk)
+  → tail: Number of lines to show from end (optional)
+  → Returns: stdout, stderr, status, lengths
+  → Use when: Check progress, diagnose failures, review completed output
+```
+
 ### Workflow Management
 ```
 workflow.init(workflowPath, projectName, projectId?, phases?)

@@ -104,10 +104,38 @@ Each role has different permissions:
 
 | Role | Tools |
 |------|-------|
-| orchestrator | workflow.*, worker.*, read, grep, find, ls |
+| orchestrator | workflow.*, worker.*, supervisor.*, read, grep, find, ls |
 | code-agent | read, write, edit, bash, grep, find, ls |
 | test-agent | read, bash, grep, find, ls |
 | ops-agent | read, bash, grep, find, ls |
+
+---
+
+## Debugging & Log Tools
+
+### supervisor.getLog
+```
+supervisor.getLog({ lines?: number, date?: string })
+  → Read supervisor log file
+  → date: YYYY-MM-DD format (default: today)
+  → Returns: Request timing, worker spawn/exit, errors
+```
+
+### worker.getLog
+```
+worker.getLog({ workerId: string, tail?: number })
+  → Get stdout/stderr from worker
+  → Works for running AND completed workers (persisted to disk)
+  → tail: Number of lines from end (optional)
+```
+
+### worker.kill
+```
+worker.kill({ workerId: string })
+  → Force kill a hung worker
+  → Use when: awaitResult timeout, worker stuck
+  → CAUTION: In-progress work will be lost
+```
 
 ---
 
@@ -123,6 +151,20 @@ npx ts-node protocol.ts
 # Terminal 2: Start orchestrator
 pi -e ./extension.ts @workflow.org
 ```
+
+---
+
+## Result Persistence
+
+Worker results are persisted to disk for reliable retrieval:
+
+| File | Purpose |
+|------|---------|
+| `/tmp/pi-adapter-results/{workerId}.json` | Worker result (findings, artifacts) |
+| `/tmp/pi-adapter-results/{workerId}.stdout` | Worker stdout |
+| `/tmp/pi-adapter-results/{workerId}.stderr` | Worker stderr |
+
+This ensures logs are available even after supervisor restart.
 
 ---
 
@@ -143,8 +185,8 @@ This adapter provides the spawn mechanism for step 3 and 4.
 
 ## See Also
 
-- [[file:../../runbook-multiagent/SKILL.md][runbook-multiagent]] - Multi-agent protocol
 - [[file:../../orchestrator-skill/SKILL.md][orchestrator-skill]] - Orchestrator profile
+- [[file:../../runbook-multiagent/SKILL.md][runbook-multiagent]] - Multi-agent protocol
 - [[file:../../exception-routing/SKILL.md][exception-routing]] - Exception routing protocol
 - [[file:protocol.ts][protocol.ts]] - Supervisor implementation
 - [[file:extension.ts][extension.ts]] - Extension implementation
