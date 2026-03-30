@@ -277,10 +277,13 @@ function spawnWorker(config: SpawnRequest, workerId: string): ChildProcess {
 
   log(`🚀 Spawning ${role} worker (${workerId})`);
 
-  const protocolDir = __dirname;
-  // cwd should be project root, which is 3 levels up from .pi/extensions/pi-adapter/
-  const cwd = path.join(protocolDir, "..", "..", "..");
+  // Use process.cwd() as base since __dirname may be '.' in ts-node
+  // process.cwd() returns .pi/extensions/pi-adapter when supervisor starts from there
+  // Project root is 3 levels up (.pi -> project)
+  const baseDir = process.cwd();
+  const cwd = path.resolve(baseDir, "..", "..", "..");
   
+  log(`   Supervisor cwd: ${baseDir}`);
   log(`   Worker working directory: ${cwd}`);
   
   const worker = spawn(PI_COMMAND, args, {
@@ -347,6 +350,8 @@ function spawnWorker(config: SpawnRequest, workerId: string): ChildProcess {
         // Add stdout/stderr to result
         result.stdout = workerState.stdoutBuffer;
         result.stderr = workerState.stderrBuffer;
+        // Update JSON file with stdout/stderr
+        fs.writeFileSync(resultFile, JSON.stringify(result, null, 2));
         state.results.set(workerId, result);
         log(`✅ Result loaded for worker ${workerId}`);
       } catch (e) {

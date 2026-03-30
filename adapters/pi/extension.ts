@@ -392,6 +392,40 @@ export default function piAdapterExtension(pi: ExtensionAPI) {
       const parentId = `parent-${Date.now()}`;
       const now = new Date().toISOString();
       
+      // Sequence number validation
+      if (!workflowPath.startsWith("runbook/")) {
+        throw new Error(`Workflow path must start with "runbook/": ${workflowPath}`);
+      }
+      
+      const sequenceMatch = workflowPath.match(/^runbook\/(\d{3})-(.+)\.org$/);
+      if (!sequenceMatch) {
+        throw new Error(`Invalid workflow path format. Expected: runbook/XXX-name.org (e.g., runbook/001-my-project.org), got: ${workflowPath}`);
+      }
+      
+      const sequenceNumber = sequenceMatch[1];
+      const sequenceName = sequenceMatch[2];
+      
+      // Check for duplicate sequence numbers in runbook directory
+      try {
+        const runbookDir = path.join(process.cwd(), "runbook");
+        if (fs.existsSync(runbookDir)) {
+          const existingFiles = fs.readdirSync(runbookDir).filter(f => f.endsWith(".org"));
+          const duplicate = existingFiles.find(f => {
+            const match = f.match(/^(\d{3})-(.+)\.org$/);
+            return match && match[1] === sequenceNumber;
+          });
+          
+          if (duplicate) {
+            throw new Error(`Sequence number ${sequenceNumber} already exists in runbook/${duplicate}. Please use a unique 3-digit sequence number.`);
+          }
+        }
+      } catch (error) {
+        if (error instanceof Error && error.message.includes("already exists")) {
+          throw error;
+        }
+        // Directory may not exist yet, which is fine
+      }
+      
       // Check if file already exists
       if (fs.existsSync(workflowPath)) {
         return {
