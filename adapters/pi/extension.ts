@@ -326,7 +326,8 @@ function generateFindingId(): string {
 }
 
 function saveLocalFindings(): void {
-  if (!WORKER_ID || localFindings.length === 0) return;
+  // Always save result if WORKER_ID is set (even with no findings)
+  if (!WORKER_ID) return;
 
   const resultFile = `${RESULTS_DIR}/${WORKER_ID}.json`;
   const result: WorkerResult = {
@@ -944,6 +945,26 @@ OPTIONAL PARAMETERS:
       } catch (err) {
         console.warn(`⚠️ Failed to cleanup supervisor: ${err}`);
       }
+    }
+  });
+
+  // Save findings on exit - MUST be beforeExit to allow async operations
+  process.on("beforeExit", () => {
+    if (WORKER_ID && localFindings.length > 0) {
+      saveLocalFindings();
+    }
+  });
+
+  // Also save on SIGINT/SIGTERM
+  process.on("SIGINT", () => {
+    if (WORKER_ID) {
+      saveLocalFindings();
+    }
+  });
+
+  process.on("SIGTERM", () => {
+    if (WORKER_ID) {
+      saveLocalFindings();
     }
   });
 
