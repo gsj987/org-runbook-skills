@@ -181,14 +181,10 @@ function spawnWorker(config: SpawnRequest, workerId: string): ChildProcess {
   console.log(`🚀 Spawning ${role} worker (${workerId})`);
   console.log(`   Command: ${PI_COMMAND} ${args.join(" ")}`);
 
-  // Determine working directory from workflowPath
-  // Use path.resolve with the protocol's directory as base, not process.cwd()
-  // This ensures relative paths work correctly regardless of where supervisor started
+  // Workers should always run in the project root (parent of adapters/)
+  // This ensures relative paths work correctly
   const protocolDir = __dirname;
-  const resolvedPath = path.isAbsolute(workflowPath) 
-    ? workflowPath 
-    : path.join(protocolDir, "..", "..", workflowPath);  // Go up from adapters/pi to project root
-  const cwd = path.dirname(resolvedPath);
+  const cwd = path.join(protocolDir, "..", "..");
   
   const worker = spawn(PI_COMMAND, args, {
     stdio: ["ignore", "pipe", "pipe"],  // stdin = ignore (not pipe)
