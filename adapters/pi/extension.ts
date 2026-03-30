@@ -806,6 +806,15 @@ OPTIONAL PARAMETERS:
     execute: async (_toolCallId, params) => {
       const { workerId, timeout } = params as { workerId: string; timeout?: number };
 
+      // Ensure supervisor is running before waiting
+      if (!await checkSupervisorHealth()) {
+        console.log("⚠️ Supervisor not running, attempting auto-start...");
+        const started = await ensureSupervisorRunning();
+        if (!started) {
+          throw new Error(`Supervisor not available on ${SUPERVISOR_URL}. Could not auto-start.`);
+        }
+      }
+
       try {
         const response = await supervisorRequest<{ success: boolean; result?: WorkerResult; error?: string }>(
           `/worker/${workerId}/await`,
@@ -843,6 +852,15 @@ OPTIONAL PARAMETERS:
     }),
     execute: async (_toolCallId, params) => {
       const { workerId } = params as { workerId: string };
+
+      // Ensure supervisor is running
+      if (!await checkSupervisorHealth()) {
+        console.log("⚠️ Supervisor not running, attempting auto-start...");
+        const started = await ensureSupervisorRunning();
+        if (!started) {
+          throw new Error(`Supervisor not available on ${SUPERVISOR_URL}. Could not auto-start.`);
+        }
+      }
 
       try {
         const response = await supervisorRequest<any>(`/worker/${workerId}/status`);
