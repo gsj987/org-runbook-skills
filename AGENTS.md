@@ -188,6 +188,11 @@ rm -rf ~/.pi/agent/extensions/pi-adapter
 - Returns 404 if workflow file doesn't exist at the specified path
 - Error messages are now differentiated by endpoint (previously all 404s returned "worker not found")
 
+**Tool Parameter Descriptions** (improved in latest commit):
+- `workflow.init`: Documents workflowPath format requirements (runbook/XXX-name.org)
+- `workflow.appendFinding`: Explains local storage until update(), rating meanings
+- `workflow.update`: Documents prerequisites, file existence requirement, usage workflow
+
 ### Schema Compliance
 All workflow.org files must follow the schema defined in [[file:examples/schema.md][examples/schema.md]]:
 - Use `#+TODO:` header line with keywords
