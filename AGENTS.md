@@ -168,6 +168,25 @@ rm -rf ~/.pi/agent/extensions/pi-adapter
 - Before testing `pi` manually with this project
 - After any E2E test that may have installed global packages
 
+### Known Test Coverage Gaps
+
+**IMPORTANT**: Some tests in `e2e/additional-coverage.sh` are stubs (echo statements only):
+- TC-WK-023 to TC-WK-028: `worker.getOutput` and `spawnSequential` tests are not implemented
+- TC-WK-021, TC-WK-022: `worker.kill` tests are not implemented
+
+**IMPORTANT**: Error handling tests in `e2e/error-handling.sh` use incorrect field names:
+- Uses `path` instead of `workflowPath` in API calls
+- These tests may pass but don't actually test the API correctly
+
+**Supervisor Restart Behavior**:
+- In-memory results (`state.results`) are lost on restart
+- Disk fallback (`/tmp/pi-adapter-results/`) preserves results across restarts
+- `worker.getOutput` works after restart via disk fallback
+
+**API Endpoint Note**:
+- `POST /workflow/update` expects `workflowPath` field (not `path`)
+- Returns 404 if workflow file doesn't exist at the specified path
+
 ### Schema Compliance
 All workflow.org files must follow the schema defined in [[file:examples/schema.md][examples/schema.md]]:
 - Use `#+TODO:` header line with keywords
