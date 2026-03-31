@@ -228,18 +228,19 @@ async function supervisorRequest<T>(
 }
 
 function findProtocolScript(): string | null {
-  // Try multiple possible locations
+  // Try multiple possible locations - PRIORITIZE deployed .pi/extensions/pi-adapter/
   const possiblePaths = [
+    // Project .pi/extensions/pi-adapter/ (DEPLOYED - highest priority)
+    path.join(__dirname, "protocol.ts"),
+    path.join(process.env.HOME || "", ".pi", "extensions", "pi-adapter", "protocol.ts"),
+    // Relative to extension location
+    path.join(__dirname, "..", "protocol.ts"),
     // Relative to current working directory
+    path.join(process.cwd(), ".pi", "extensions", "pi-adapter", "protocol.ts"),
     path.join(process.cwd(), "adapters", "pi", "protocol.ts"),
     path.join(process.cwd(), "protocol.ts"),
-    // Relative to extension location
-    path.join(__dirname, "protocol.ts"),
-    path.join(__dirname, "..", "protocol.ts"),
     // Global adapters directory
     path.join(process.env.HOME || "", ".pi", "adapters", "pi", "protocol.ts"),
-    // Project .pi/extensions/pi-adapter/
-    path.join(process.env.HOME || "", ".pi", "extensions", "pi-adapter", "protocol.ts"),
   ];
 
   for (const p of possiblePaths) {
