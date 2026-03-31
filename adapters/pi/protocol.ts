@@ -113,10 +113,14 @@ log("📝 Supervisor starting...");
 log(`📝 Log file: ${LOG_FILE}`);
 
 // ============================================================
-// Singleton
+// Singleton (Port must be defined before PID file)
 // ============================================================
 
-const PID_FILE = path.join(process.env.HOME || "/tmp", ".pi-adapter-supervisor.pid");
+// Support both PI_SUPERVISOR_PORT (from extension) and SUPERVISOR_PORT (direct invocation)
+const PORT = parseInt(process.env.PI_SUPERVISOR_PORT || process.env.SUPERVISOR_PORT || "3847", 10);
+
+// PID file is port-specific to allow multiple supervisors on different ports
+const PID_FILE = path.join(process.env.HOME || "/tmp", `.pi-adapter-supervisor-${PORT}.pid`);
 
 function isProcessAlive(pid: number): boolean {
   try {
@@ -157,7 +161,7 @@ function cleanupPidFile(): void {
 
 const existingPid = checkExistingSupervisor();
 if (existingPid) {
-  log(`⚠️ Supervisor already running with PID ${existingPid}`);
+  log(`⚠️ Supervisor already running on port ${PORT} with PID ${existingPid}`);
   process.exit(0);
 }
 
@@ -231,7 +235,6 @@ interface SupervisorState {
 
 const PI_COMMAND = process.env.PI_PATH || "pi";
 const RESULTS_DIR = process.env.SUPERVISOR_RESULTS_DIR || "/tmp/pi-adapter-results";
-const PORT = parseInt(process.env.SUPERVISOR_PORT || "3847", 10);
 const MAX_BUFFER_SIZE = 1024 * 1024;
 
 const state: SupervisorState = {
@@ -812,7 +815,17 @@ app.get("/worker/:workerId/logfile", (req, res) => {
 // Start Server
 // ============================================================
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   log(`✅ Supervisor v2.1 listening on http://localhost:${PORT}`);
   log(`   Log file: ${LOG_FILE}`);
+});
+
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    logError(`Port ${PORT} is already in use.`);
+    logError(`Either stop the existing supervisor or use a different port:`);
+    logError(`  SUPERVISOR_PORT=<other-port> npx ts-node --esm protocol.ts`);
+    process.exit(1);
+  }
+  throw err;
 });
