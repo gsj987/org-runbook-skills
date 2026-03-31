@@ -836,6 +836,10 @@ OPTIONAL PARAMETERS:
     execute: async (_toolCallId, params) => {
       const { workerId, timeout } = params as { workerId: string; timeout?: number };
 
+      if (!workerId || workerId.trim() === "") {
+        throw new Error("workerId is required and cannot be empty");
+      }
+
       // Ensure supervisor is running before waiting
       if (!await checkSupervisorHealth()) {
         console.log("⚠️ Supervisor not running, attempting auto-start...");
@@ -882,6 +886,10 @@ OPTIONAL PARAMETERS:
     }),
     execute: async (_toolCallId, params) => {
       const { workerId } = params as { workerId: string };
+
+      if (!workerId || workerId.trim() === "") {
+        throw new Error("workerId is required and cannot be empty");
+      }
 
       // Ensure supervisor is running
       if (!await checkSupervisorHealth()) {
@@ -1127,6 +1135,10 @@ RETURNS:
     execute: async (_toolCallId, params) => {
       const { workerId } = params as { workerId: string };
 
+      if (!workerId || workerId.trim() === "") {
+        throw new Error("workerId is required and cannot be empty");
+      }
+
       // Ensure supervisor is running
       if (!await checkSupervisorHealth()) {
         const started = await ensureSupervisorRunning();
@@ -1189,6 +1201,10 @@ CAUTION:
     }),
     execute: async (_toolCallId, params) => {
       const { workerId } = params as { workerId: string };
+
+      if (!workerId || workerId.trim() === "") {
+        throw new Error("workerId is required and cannot be empty");
+      }
 
       // Ensure supervisor is running
       if (!await checkSupervisorHealth()) {
