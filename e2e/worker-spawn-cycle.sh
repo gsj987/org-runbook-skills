@@ -46,7 +46,7 @@ test_tc_wk_001() {
     
     # Await and verify
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -76,7 +76,7 @@ test_tc_wk_002() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -106,7 +106,7 @@ test_tc_wk_003() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -136,7 +136,7 @@ test_tc_wk_004() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -166,7 +166,7 @@ test_tc_wk_005() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -196,7 +196,7 @@ test_tc_wk_006() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -226,7 +226,7 @@ test_tc_wk_007() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -256,7 +256,7 @@ test_tc_wk_008() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -286,7 +286,7 @@ test_tc_wk_009() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -316,7 +316,7 @@ test_tc_wk_010() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -346,7 +346,7 @@ test_tc_wk_011() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -376,7 +376,7 @@ test_tc_wk_012() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -406,7 +406,7 @@ test_tc_wk_013() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -436,7 +436,7 @@ test_tc_wk_014() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -466,7 +466,7 @@ test_tc_wk_015() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -496,7 +496,7 @@ test_tc_wk_016() {
     assert_not_empty "$worker_id" "Should receive workerId"
     
     local result
-    result=$(api_await "$worker_id" 120)
+    result=$(api_await_with_poll "$worker_id" 120)
     
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode // -1')" "Worker should exit with 0"
     
@@ -526,19 +526,19 @@ test_tc_wk_017() {
     worker_id=$(echo "$spawn_response" | jq -r '.workerId // empty')
     assert_not_empty "$worker_id" "Should receive workerId"
     
-    # Await result with 60 second timeout
+    # Await result with polling (worker should complete quickly)
     local result
-    result=$(api_await "$worker_id" 60)
+    result=$(api_await_with_poll "$worker_id" 60)
     
     # Verify result structure
     assert_json_has_key "$result" "exitCode" "Result should contain exitCode"
     assert_json_has_key "$result" "workerId" "Result should contain workerId"
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode')" "Exit code should be 0"
-    assert_equals "$worker_id" "$(echo "$result" | jq -r '.workerId')" "WorkerId should match"
+    assert_equals "$worker_id" "$(echo "$result" | jq -r '.result.workerId')" "WorkerId should match"
     
     # Verify stdout contains expected output
     local stdout
-    stdout=$(echo "$result" | jq -r '.stdout // empty')
+    stdout=$(echo "$result" | jq -r '.result.stdout // empty')
     assert_contains "$stdout" "success" "Stdout should contain expected output"
     
     if assert_any_failed; then
@@ -651,7 +651,7 @@ test_tc_wk_019() {
     
     # Verify the result has correct exit code
     local result
-    result=$(api_await "$worker_id" 30)
+    result=$(api_await_with_poll "$worker_id" 30)
     assert_equals "0" "$(echo "$result" | jq -r '.result.exitCode')" "Worker should exit with 0"
     
     if assert_any_failed; then
@@ -699,23 +699,23 @@ test_tc_wk_020() {
     assert_not_equals "$worker_id1" "$worker_id3" "Worker IDs should be unique"
     assert_not_equals "$worker_id2" "$worker_id3" "Worker IDs should be unique"
     
-    # Await all results
+    # Await all results with polling
     local result1
     local result2
     local result3
     
-    result1=$(api_await "$worker_id1" 120)
-    result2=$(api_await "$worker_id2" 120)
-    result3=$(api_await "$worker_id3" 120)
+    result1=$(api_await_with_poll "$worker_id1" 120)
+    result2=$(api_await_with_poll "$worker_id2" 120)
+    result3=$(api_await_with_poll "$worker_id3" 120)
     
     # Verify each result matches original task
     local stdout1
     local stdout2
     local stdout3
     
-    stdout1=$(echo "$result1" | jq -r '.stdout // empty')
-    stdout2=$(echo "$result2" | jq -r '.stdout // empty')
-    stdout3=$(echo "$result3" | jq -r '.stdout // empty')
+    stdout1=$(echo "$result1" | jq -r '.result.stdout // empty')
+    stdout2=$(echo "$result2" | jq -r '.result.stdout // empty')
+    stdout3=$(echo "$result3" | jq -r '.result.stdout // empty')
     
     assert_contains "$stdout1" "worker-1-result" "Worker 1 stdout should match"
     assert_contains "$stdout2" "worker-2-result" "Worker 2 stdout should match"

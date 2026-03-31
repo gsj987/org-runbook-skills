@@ -43,6 +43,27 @@ assert_equals() {
     return 0
 }
 
+# Assert two values are NOT equal
+# Usage: assert_not_equals "value1" "value2" ["message"]
+assert_not_equals() {
+    local value1="$1"
+    local value2="$2"
+    local message="${3:-Values should not be equal}"
+    
+    ASSERT_PASSED=$((ASSERT_PASSED + 1))
+    
+    if [[ "$value1" == "$value2" ]]; then
+        ASSERT_PASSED=$((ASSERT_PASSED - 1))
+        ASSERT_FAILED=$((ASSERT_FAILED + 1))
+        echo -e "${RED}✗ ASSERT FAILED${NC}: $message"
+        echo -e "  ${RED}Both values: '$value1'${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}✓${NC} $message"
+    return 0
+}
+
 # Assert a string contains a substring
 # Usage: assert_contains "string" "substring" ["message"]
 assert_contains() {
@@ -661,7 +682,7 @@ assert_reset() {
 }
 
 # Export functions
-export -f assert_equals assert_contains assert_not_contains
+export -f assert_equals assert_not_equals assert_contains assert_not_contains
 export -f assert_file_exists assert_file_not_exists
 export -f assert_dir_exists assert_dir_not_exists
 export -f assert_http_ok assert_http_status
