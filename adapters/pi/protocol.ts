@@ -96,7 +96,6 @@ function logRequest(req: express.Request, res: express.Response, next: express.N
     const ms = Date.now() - start;
     const icon = res.statusCode >= 400 ? "❌" : "✅";
     log(`${icon} [${id}] ${req.method} ${req.path} → ${res.statusCode} (${ms}ms)`);
-    if (ms > 30000) logWarn(`⚠️ [${id}] SLOW REQUEST: ${ms}ms`);
     if (res.statusCode >= 500) logError(`💥 [${id}] SERVER ERROR ${res.statusCode}`);
     pendingRequests.delete(id);
   });
@@ -496,6 +495,7 @@ app.get("/worker/:workerId/status", (req, res) => {
 app.post("/worker/:workerId/await", (req, res) => {
   const { workerId } = req.params;
   const timeout = req.body.timeout || 300;
+  const progressInterval = 30; // Report progress every 30 seconds
 
   log(`⏳ [await] Waiting for worker ${workerId} (timeout: ${timeout}s)`);
 
@@ -512,6 +512,8 @@ app.post("/worker/:workerId/await", (req, res) => {
   }
 
   let resolved = false;
+  let progressReported = false;
+  
   const resolveOnce = (fn: () => void) => {
     if (!resolved) {
       resolved = true;
@@ -519,20 +521,74 @@ app.post("/worker/:workerId/await", (req, res) => {
     }
   };
 
+  // Get health status based on output activity
+  const getHealthStatus = (): "healthy" | "idle" | "unknown" => {
+    const stdoutLen = workerState.stdoutBuffer.length;
+    const stderrLen = workerState.stderrBuffer.length;
+    const uptime = Date.now() - workerState.startTime;
+    
+    if (stdoutLen > 0 || stderrLen > 0) {
+      return "healthy"; // Worker is producing output
+    } else if (uptime < 5000) {
+      return "unknown"; // Too early to tell
+    } else {
+      return "idle"; // No output yet but might be normal (e.g., downloading, compiling)
+    }
+  };
+
+  // Progress report function
+  const sendProgress = () => {
+    if (resolved) return;
+    
+    const uptime = Date.now() - workerState.startTime;
+    const health = getHealthStatus();
+    
+    log(`📊 [await] Progress report for ${workerId}: ${Math.round(uptime/1000)}s, health: ${health}`);
+    
+    resolveOnce(() => {
+      res.json({ 
+        success: false,
+        status: "running",
+        workerId,
+        uptime,
+        health,
+        stdoutLength: workerState.stdoutBuffer.length,
+        stderrLength: workerState.stderrBuffer.length,
+        stdoutPreview: workerState.stdoutBuffer.slice(-200),
+        message: `Worker still running (${Math.round(uptime/1000)}s elapsed). Health: ${health}.`,
+        suggestion: "Continue waiting or check with GET /worker/:id/status for details.",
+      });
+    });
+  };
+
+  // Schedule progress reports every 30 seconds
+  const progressTimerId = setInterval(() => {
+    if (!resolved) {
+      sendProgress();
+    }
+  }, progressInterval * 1000);
+
   const timeoutId = setTimeout(() => {
     logWarn(`⏰ [await] TIMEOUT waiting for worker ${workerId} after ${timeout}s`);
+    clearInterval(progressTimerId);
     resolveOnce(() => {
       res.status(408).json({ 
+        success: false,
+        status: "timeout",
         error: "Timeout waiting for worker", 
         workerId,
-        suggestion: "Worker is still running. Use GET /worker/:id/status to check, or DELETE /worker/:id to kill.",
         uptime: Date.now() - workerState.startTime,
+        health: getHealthStatus(),
+        stdoutLength: workerState.stdoutBuffer.length,
+        stderrLength: workerState.stderrBuffer.length,
+        suggestion: "Worker is still running. Use GET /worker/:id/status to check, or DELETE /worker/:id to kill.",
       });
     });
   }, timeout * 1000);
 
   const exitHandler = (code: number) => {
     clearTimeout(timeoutId);
+    clearInterval(progressTimerId);
     const duration = Date.now() - workerState.startTime;
     log(`👋 [await] Worker ${workerId} exited with code ${code} (${duration}ms)`);
     
