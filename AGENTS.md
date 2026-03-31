@@ -193,6 +193,12 @@ rm -rf ~/.pi/agent/extensions/pi-adapter
 - `workflow.appendFinding`: Stores findings locally until update()
 - `workflow.update`: Writes accumulated findings to file
 
+**Test Suite Status**:
+- `worker-spawn-cycle.sh`: TC-WK-001 to TC-WK-017 pass (16/20)
+- TC-WK-018 (timeout test): fails due to curl --fail option
+- TC-WK-019 (status test): fails due to race condition
+- TC-WK-020 (isolation test): fails due to result file path issues
+
 ### Schema Compliance
 All workflow.org files must follow the schema defined in [[file:examples/schema.md][examples/schema.md]]:
 - Use `#+TODO:` header line with keywords
