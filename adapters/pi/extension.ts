@@ -851,11 +851,24 @@ OPTIONAL PARAMETERS:
       }
 
       try {
-        const response = await supervisorRequest<{ success: boolean; result?: WorkerResult; error?: string }>(
+        const response = await supervisorRequest<{
+          success: boolean;
+          result?: WorkerResult;
+          error?: string;
+          status?: string;
+          uptime?: number;
+          health?: string;
+          stdoutLength?: number;
+          stderrLength?: number;
+          stdoutPreview?: string;
+          message?: string;
+          suggestion?: string;
+        }>(
           `/worker/${workerId}/await`,
           { method: "POST", body: JSON.stringify({ timeout: timeout || 1800 }) }
         );
 
+        // Worker completed successfully
         if (response.success && response.result) {
           return {
             content: [{ type: "text", text: `Worker ${workerId} completed with ${response.result.findings.length} findings` }],
@@ -868,9 +881,38 @@ OPTIONAL PARAMETERS:
               checkpoint: `✅ Worker ${workerId} completed with ${response.result.findings.length} findings`,
             },
           };
-        } else {
-          throw new Error(response.error || "Unknown error");
         }
+
+        // Progress report - worker still running
+        if (response.status === "running") {
+          return {
+            content: [{
+              type: "text",
+              text: response.message || `Worker ${workerId} is still running (${Math.round((response.uptime || 0)/1000)}s elapsed). Health: ${response.health || "unknown"}.`,
+            }],
+            details: {
+              success: false,
+              status: "running",
+              workerId,
+              uptime: response.uptime,
+              health: response.health,
+              stdoutLength: response.stdoutLength,
+              stderrLength: response.stderrLength,
+              stdoutPreview: response.stdoutPreview,
+              message: response.message,
+              suggestion: response.suggestion || "Worker is still running. Call awaitResult again to continue waiting.",
+            },
+            isProgress: true,  // Flag to indicate this is a progress update, not an error
+          };
+        }
+
+        // Timeout response
+        if (response.status === "timeout") {
+          throw new Error(response.error || `Worker ${workerId} timed out after ${timeout || 1800}s. Use worker.status() to check current state.`);
+        }
+
+        // Error case
+        throw new Error(response.error || "Unknown error from supervisor");
       } catch (error) {
         throw new Error(`Failed to await result: ${error}`);
       }
