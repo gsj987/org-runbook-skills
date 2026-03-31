@@ -144,6 +144,30 @@ When orchestrator starts a new project:
 - Silent failures can break orchestrator sessions in production
 - Worker CWD issues can cause workers to fail silently
 
+### Extension Conflict Prevention (IMPORTANT)
+
+When testing locally, pi may load BOTH:
+1. Global extension: `~/.pi/agent/extensions/pi-adapter/` (if installed globally)
+2. Local extension: `.pi/extensions/pi-adapter/` (from deploy.sh)
+
+This causes a conflict with error: `Failed to load extension ... conflicts`.
+
+**Before local testing, ALWAYS clean up global extension:**
+
+```bash
+rm -rf ~/.pi/agent/extensions/pi-adapter
+```
+
+**Why this happens:**
+- Running `./deploy.sh --project .` deploys pi-adapter to `.pi/extensions/pi-adapter/`
+- If you previously installed pi-adapter globally (e.g., via `npm install -g`), both copies load
+- This creates duplicate tool registrations and conflicts
+
+**When to clean:**
+- Before running `./e2e/pi-adapter-extension.sh`
+- Before testing `pi` manually with this project
+- After any E2E test that may have installed global packages
+
 ### Schema Compliance
 All workflow.org files must follow the schema defined in [[file:examples/schema.md][examples/schema.md]]:
 - Use `#+TODO:` header line with keywords
