@@ -270,6 +270,138 @@ step5_verify() {
 }
 
 # ============================================================
+# STEP 6: Test sequential execution with progress reporting
+# ============================================================
+step6_sequential_test() {
+    echo ""
+    echo "=========================================="
+    echo "STEP 6: Sequential Execution Test"
+    echo "=========================================="
+    
+    local failed=0
+    local log_file=$(ls -t ~/.pi-adapter/logs/supervisor-*.log 2>/dev/null | head -1)
+    
+    # Clean old logs for this test
+    rm -rf ~/.pi-adapter/logs/*
+    rm -f "$PROJECT_DIR/runbook/"*-e2e-seq*.org
+    rm -f /tmp/e2e-seq-task1.txt /tmp/e2e-seq-task2.txt
+    
+    # Restart supervisor with fresh logs
+    fuser -k 3847/tcp 2>/dev/null || true
+    sleep 2
+    cd "$PROJECT_DIR/.pi/extensions/pi-adapter"
+    npx ts-node --esm protocol.ts > /tmp/supervisor-seq.log 2>&1 &
+    sleep 6
+    
+    if ! curl -s http://localhost:3847/health | grep -q '"status":"ok"'; then
+        log_error "Supervisor failed to restart"
+        return 1
+    fi
+    log_success "Supervisor restarted with fresh logs"
+    
+    # Run orchestrator with sequential tasks
+    cd "$PROJECT_DIR"
+    timeout 90 pi -p -- .pi/skills/orchestrator-skill 2>&1 << 'EOF' > /tmp/pi-seq-output.log
+As orchestrator:
+1. Create runbook at runbook/999-e2e-seq.org
+2. Use worker.spawnSequential to execute two tasks:
+   - Task 1 (id: task1): echo "Sequential task 1" and save to /tmp/e2e-seq-task1.txt
+   - Task 2 (id: task2): echo "Sequential task 2" and save to /tmp/e2e-seq-task2.txt
+3. Both tasks should execute in sequence (task 2 only after task 1 completes)
+4. Mark runbook tasks as DONE when complete
+EOF
+    
+    # Give workers time to finish
+    sleep 3
+    
+    # Check 1: Both result files exist
+    if [ -f "/tmp/e2e-seq-task1.txt" ]; then
+        log_success "Task 1 result exists"
+    else
+        log_error "Task 1 result not found"
+        ((failed++))
+    fi
+    
+    if [ -f "/tmp/e2e-seq-task2.txt" ]; then
+        log_success "Task 2 result exists"
+    else
+        log_error "Task 2 result not found"
+        ((failed++))
+    fi
+    
+    # Check 2: Runbook created (look for any e2e-seq runbook)
+    local seq_runbook=$(ls "$PROJECT_DIR/runbook/"*-e2e-seq*.org 2>/dev/null | head -1)
+    if [ -n "$seq_runbook" ]; then
+        log_success "Sequential runbook created: $(basename "$seq_runbook")"
+    else
+        log_error "Sequential runbook not created"
+        ((failed++))
+    fi
+    
+    # Check 3: Verify sequential execution in logs
+    local new_log=$(ls -t ~/.pi-adapter/logs/supervisor-*.log 2>/dev/null | head -1)
+    if [ -f "$new_log" ]; then
+        # Count spawn events
+        local spawn_count=$(grep -c "Spawning.*worker" "$new_log" 2>/dev/null || echo "0")
+        local spawn_count=${spawn_count//[[:space:]]/}
+        
+        if [ "$spawn_count" -ge 2 ]; then
+            log_success "Multiple workers spawned ($spawn_count workers)"
+        else
+            log_error "Expected at least 2 workers, found $spawn_count"
+            ((failed++))
+        fi
+        
+        # Check for no SLOW warnings
+        local slow_count=$(grep -c "SLOW" "$new_log" 2>/dev/null | head -1 || echo "0")
+        slow_count=${slow_count//[[:space:]]/}
+        if [ "$slow_count" = "0" ]; then
+            log_success "No SLOW request warnings"
+        else
+            log_error "Found $slow_count SLOW request warnings"
+            ((failed++))
+        fi
+        
+        # Check for no errors
+        local error_count=$(grep -c "ERROR" "$new_log" 2>/dev/null | head -1 || echo "0")
+        error_count=${error_count//[[:space:]]/}
+        if [ "$error_count" = "0" ]; then
+            log_success "No errors in supervisor log"
+        else
+            log_error "Found $error_count errors in supervisor log"
+            grep "ERROR" "$new_log" | tail -3
+            ((failed++))
+        fi
+        
+        # Check for progress reporting (health status instead of warning)
+        if grep -q "Progress report" "$new_log" 2>/dev/null; then
+            log_success "Progress reporting working (health status returned)"
+            grep "Progress report" "$new_log"
+        else
+            log_info "No long-running tasks in this test (progress not triggered)"
+        fi
+        
+        # Check for successful completion
+        local success_count=$(grep -c "exited with code 0" "$new_log" 2>/dev/null || echo "0")
+        success_count=${success_count//[[:space:]]/}
+        if [ "$success_count" -ge 2 ]; then
+            log_success "All workers completed successfully ($success_count workers)"
+        else
+            log_error "Expected 2 successful completions, found $success_count"
+            ((failed++))
+        fi
+    else
+        log_error "No supervisor log found"
+        ((failed++))
+    fi
+    
+    # Cleanup sequential test files
+    rm -f /tmp/e2e-seq-task1.txt /tmp/e2e-seq-task2.txt
+    
+    return $failed
+}
+
+# ============================================================
 # Cleanup
 # ============================================================
 final_cleanup() {
@@ -310,6 +442,7 @@ main() {
     step3_start_supervisor || exit 1
     step4_run_pi || exit 1
     step5_verify || exit 1
+    step6_sequential_test || exit 1
     
     echo ""
     echo "=========================================="
