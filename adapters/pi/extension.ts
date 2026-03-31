@@ -421,7 +421,21 @@ async function supervisorRequest<T>(
 
     if (!response.ok) {
       if (response.status === 404) {
-        throw new Error(`Supervisor: worker not found (may still be starting). Try again in a few seconds.`);
+        // Differentiate 404 errors by endpoint for better debugging
+        const requestDesc = `${options.method || "GET"} ${endpoint}`;
+        if (requestDesc.includes("/worker/") && requestDesc.includes("/await")) {
+          throw new Error(`Supervisor: worker not found or already completed. Try again in a few seconds.`);
+        }
+        if (requestDesc.includes("/worker/") && requestDesc.includes("/status")) {
+          throw new Error(`Supervisor: worker not found (may still be starting). Try again in a few seconds.`);
+        }
+        if (requestDesc.includes("/workflow/update")) {
+          throw new Error(`Supervisor: workflow file not found. Check that the workflowPath is correct.`);
+        }
+        if (requestDesc.includes("/worker/") && requestDesc.includes("/output")) {
+          throw new Error(`Supervisor: worker output not found (may still be running or already cleaned up).`);
+        }
+        throw new Error(`Supervisor: endpoint not found (${requestDesc}).`);
       }
       throw new Error(`Supervisor error: ${response.status} ${response.statusText}`);
     }
