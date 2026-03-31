@@ -673,3 +673,34 @@ export -f assert_gt assert_lt assert_num_equals
 export -f assert_array_contains assert_array_not_empty
 export -f assert_port_free assert_port_in_use assert_json_structure assert_any_failed
 export -f assert_summary assert_reset
+
+# File-specific assertions
+
+# Assert file contains a string
+# Usage: assert_file_contains "/path/to/file" "string" ["message"]
+assert_file_contains() {
+    local file="$1"
+    local string="$2"
+    local message="${3:-File should contain string}"
+    
+    local content
+    content=$(cat "$file")
+    
+    assert_contains "$content" "$string" "$message"
+}
+
+# Assert a condition is true
+# Usage: assert_true "command" ["message"]
+assert_true() {
+    local cmd="$1"
+    local message="${2:-Command should succeed}"
+    
+    if eval "$cmd"; then
+        echo -e "${GREEN}✓${NC} $message"
+        return 0
+    else
+        echo -e "${RED}✗ ASSERT FAILED${NC}: $message"
+        echo -e "  ${RED}Command failed: $cmd${NC}"
+        return 1
+    fi
+}

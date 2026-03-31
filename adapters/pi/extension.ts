@@ -22,6 +22,213 @@ import * as path from "path";
 import * as fs from "fs";
 
 // ============================================================
+// Exported Workflow Functions (for programmatic use)
+// ============================================================
+
+export interface WorkflowInitParams {
+  workflowPath: string;
+  projectName: string;
+  projectId?: string;
+  phases?: string;
+}
+
+export interface WorkflowInitResult {
+  success: boolean;
+  message: string;
+  workflowPath: string;
+  projectId: string;
+  parentTaskId: string;
+  phases: string[];
+}
+
+export interface WorkflowUpdateResult {
+  success: boolean;
+  findingsWritten: number;
+}
+
+/**
+ * Initialize a new workflow.org file.
+ * Can be called directly (for E2E tests) or via pi tool.
+ */
+export async function workflowInit(params: WorkflowInitParams): Promise<WorkflowInitResult> {
+  const { workflowPath, projectName, projectId, phases } = params;
+  
+  const phaseList = phases?.split(",").map(p => p.trim()) || 
+    ["discovery", "design", "implementation", "test", "integration", "deploy-check", "acceptance"];
+  const projectIdFinal = projectId || `proj-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+  const parentId = `parent-${Date.now()}`;
+  const now = new Date().toISOString();
+  
+  // Sequence number validation
+  if (!workflowPath.startsWith("runbook/")) {
+    throw new Error(`Workflow path must start with "runbook/": ${workflowPath}`);
+  }
+  
+  const sequenceMatch = workflowPath.match(/^runbook\/(\d{3})-(.+)\.org$/);
+  if (!sequenceMatch) {
+    throw new Error(`Invalid workflow path format. Expected: runbook/XXX-name.org (e.g., runbook/001-my-project.org), got: ${workflowPath}`);
+  }
+  
+  const sequenceNumber = sequenceMatch[1];
+  
+  // Check for duplicate sequence numbers in runbook directory
+  try {
+    const runbookDir = path.join(process.cwd(), "runbook");
+    if (fs.existsSync(runbookDir)) {
+      const existingFiles = fs.readdirSync(runbookDir).filter(f => f.endsWith(".org"));
+      const duplicate = existingFiles.find(f => {
+        const match = f.match(/^(\d{3})-(.+)\.org$/);
+        return match && match[1] === sequenceNumber;
+      });
+      
+      if (duplicate) {
+        throw new Error(`Sequence number ${sequenceNumber} already exists in runbook/${duplicate}. Please use a unique 3-digit sequence number.`);
+      }
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("already exists")) {
+      throw error;
+    }
+  }
+  
+  // Check if file already exists
+  if (fs.existsSync(workflowPath)) {
+    throw new Error(`Workflow already exists at ${workflowPath}`);
+  }
+  
+  // Generate phase gate tasks
+  let phaseGates = "";
+  for (let i = 0; i < phaseList.length - 1; i++) {
+    const current = phaseList[i];
+    const next = phaseList[i + 1];
+    phaseGates += `
+*** TODO Phase: ${current} → ${next}
+:PROPERTIES:
+:ID: gate-${current}-${next}
+:PARENT: ${parentId}
+:OWNER: orchestrator
+:PHASE: ${current}
+:EXIT_CRITERIA:
+:  - [ ] Define exit criteria for ${current}
+:END:
+- Gate :: Approval required to proceed
+- Next Actions ::
+`;
+  }
+  
+  // Generate subtasks for discovery phase
+  const discoverySubtasks = `
+*** TODO Discovery subtask
+:PROPERTIES:
+:ID: subtask-discovery-001
+:PARENT: ${parentId}
+:OWNER: <role-code>
+:PHASE: discovery
+:CREATED: ${now}
+:END:
+- Goal :: <goal>
+- Context ::
+- Findings ::
+- Evidence ::
+- Next Actions ::
+`;
+  
+  // Create workflow content following schema
+  const content = `#+title:      ${projectName}
+#+date:       [${now.slice(0, 10)}]
+#+filetags:   :project:
+#+identifier: ${projectIdFinal}
+#+TODO:       TODO(t) IN-PROGRESS(i) | DONE(d) BLOCKED(b) CANCELLED(c)
+
+* Project: ${projectName}
+:PROPERTIES:
+:PHASE: discovery
+:END:
+
+** IN-PROGRESS <overall coordination>
+:PROPERTIES:
+:ID: ${parentId}
+:OWNER: orchestrator
+:PHASE: discovery
+:CREATED: ${now}
+:UPDATED: ${now}
+:EXIT_CRITERIA:
+:  - [ ] Define project-specific exit criteria
+:NON-GOALS:
+:  - [ ] no scope expansion without approval
+:END:
+
+- Goal :: ${projectName}
+- Context ::
+- Findings ::
+- Evidence ::
+- Next Actions ::
+
+${discoverySubtasks}
+${phaseGates}
+`;
+
+  try {
+    // Create parent directories if needed
+    const dir = path.dirname(workflowPath);
+    if (dir && dir !== ".") {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    
+    fs.writeFileSync(workflowPath, content);
+    return {
+      success: true,
+      message: "Workflow created following schema from examples/schema.md",
+      workflowPath,
+      projectId: projectIdFinal,
+      parentTaskId: parentId,
+      phases: phaseList,
+    };
+  } catch (error) {
+    throw new Error(`Failed to create workflow: ${error}`);
+  }
+}
+
+/**
+ * Update workflow.org with findings.
+ * Can be called directly (for E2E tests) or via pi tool.
+ */
+export async function workflowUpdate(workflowPath: string, findings: any[]): Promise<WorkflowUpdateResult> {
+  // Check if file exists
+  if (!fs.existsSync(workflowPath)) {
+    throw new Error(`Workflow not found: ${workflowPath}`);
+  }
+  
+  // Read existing content
+  let content = fs.readFileSync(workflowPath, "utf-8");
+  
+  // Append findings to the "Findings" section
+  for (const finding of findings) {
+    const timestamp = finding.timestamp || new Date().toISOString();
+    const findingLine = `- [${timestamp}] ${finding.id}: ${finding.content} [${finding.rating}]\n`;
+    
+    // Find "Findings ::" section and append
+    if (content.includes("Findings ::")) {
+      content = content.replace(/(Findings ::\s*\n)([\s\S]*?)(\n- [^[\s]|$)/, 
+        (match, header, existing, next) => {
+          return header + existing + findingLine + next;
+        });
+    } else {
+      // Append at end of current task
+      content += findingLine;
+    }
+  }
+  
+  // Write back
+  fs.writeFileSync(workflowPath, content);
+  
+  return {
+    success: true,
+    findingsWritten: findings.length,
+  };
+}
+
+// ============================================================
 // Configuration (from environment)
 // ============================================================
 
@@ -349,6 +556,12 @@ function saveLocalFindings(): void {
 // ============================================================
 // Main Extension
 // ============================================================
+
+// Export workflow object for direct programmatic use (e.g., E2E tests)
+export const workflow = {
+  init: workflowInit,
+  update: workflowUpdate,
+};
 
 export default function piAdapterExtension(pi: ExtensionAPI) {
   console.log("🔌 pi-adapter extension loaded");
