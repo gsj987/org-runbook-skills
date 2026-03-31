@@ -186,6 +186,7 @@ rm -rf ~/.pi/agent/extensions/pi-adapter
 **API Endpoint Note**:
 - `POST /workflow/update` expects `workflowPath` field (not `path`)
 - Returns 404 if workflow file doesn't exist at the specified path
+- Error messages are now differentiated by endpoint (previously all 404s returned "worker not found")
 
 ### Schema Compliance
 All workflow.org files must follow the schema defined in [[file:examples/schema.md][examples/schema.md]]:
