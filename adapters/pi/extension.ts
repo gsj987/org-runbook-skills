@@ -488,8 +488,12 @@ async function startSupervisor(): Promise<boolean> {
   console.log(`🚀 Auto-starting supervisor from: ${protocolPath}`);
 
   return new Promise((resolve) => {
-    // Use shell to start supervisor - more reliable across environments
-    supervisorProcess = spawn("bash", ["-c", `cd "${path.dirname(protocolPath)}" && npx ts-node --esm "${path.basename(protocolPath)}"`], {
+    const dir = path.dirname(protocolPath);
+    const file = path.basename(protocolPath);
+    
+    // Use nohup to ensure process survives parent exit
+    // Detached spawn with unref() + nohup for reliability
+    supervisorProcess = spawn("bash", ["-c", `cd "${dir}" && exec nohup npx ts-node --esm "${file}" > /dev/null 2>&1 &`], {
       stdio: ["ignore", "pipe", "pipe"],
       env: {
         ...process.env,
