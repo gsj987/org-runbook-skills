@@ -605,20 +605,10 @@ export default function piAdapterExtension(pi: ExtensionAPI) {
     label: "Initialize Workflow",
     description: `Initialize a new workflow.org file following the schema defined in examples/schema.md. Creates a runbook with proper TODO keywords, Task/Finding/Evidence objects, and phase gates.
 
-REQUIREMENTS:
-- workflowPath MUST start with "runbook/" and follow format: runbook/XXX-name.org
-- XXX must be a 3-digit sequence number (e.g., 001, 002, 003)
-- Sequence numbers must be unique and sequential (check existing runbooks first)
-- Do NOT use existing sequence numbers
-
 EXAMPLE:
-workflow.init({ workflowPath: "runbook/001-my-project.org", projectName: "My Project" })
-
-PHRASES (optional):
-- Default: discovery,design,implementation,test,integration,deploy-check,acceptance
-- Custom: Provide comma-separated list if needed`,
+workflow.init({ workflowPath: "runbook/001-my-project.org", projectName: "My Project" })`,
     parameters: Type.Object({
-      workflowPath: Type.String({ description: "Path for workflow in format: runbook/XXX-name.org (e.g., runbook/001-my-project.org). MUST start with 'runbook/'." }),
+      workflowPath: Type.String({ description: "Path for workflow.org file" }),
       projectName: Type.String({ description: "Project name" }),
       projectId: Type.Optional(Type.String({ description: "Project ID (auto-generated if not provided)" })),
       phases: Type.Optional(Type.String({ description: "Comma-separated phases (default: discovery,design,implementation,test,integration,deploy-check,acceptance)" })),
@@ -826,23 +816,11 @@ ${phaseGates}
     label: "Append Finding",
     description: `Append a finding to a task with rating.
 
-FININGS ARE STORED LOCALLY until workflow.update() is called.
-Multiple findings can be accumulated before calling update.
-
-RATINGS:
-- ★★★ (3 stars): High confidence, strong evidence, well-tested
-- ★★ (2 stars): Medium confidence, partial evidence, may need verification
-- ★ (1 star): Low confidence, weak evidence, exploratory
-
-EXAMPLES:
-workflow.appendFinding({ taskId: "task-1", content: "API response time under 100ms", rating: "★★★" })
-workflow.appendFinding({ taskId: "task-2", content: "Memory usage increased 10%", rating: "★" })
-
-NOTE: Findings are written to the runbook file when workflow.update() is called.`,
+Findings are stored locally until workflow.update() is called.`,
     parameters: Type.Object({
       taskId: Type.String({ description: "Task ID this finding relates to" }),
       content: Type.String({ description: "Finding content (what was discovered)" }),
-      rating: Type.String({ description: "Reliability rating: ★★★ (high), ★★ (medium), ★ (low/uncertain)" }),
+      rating: Type.String({ description: "Reliability rating: ★★★, ★★, or ★" }),
     }),
     execute: async (_toolCallId, params) => {
       const { taskId, content, rating } = params as { taskId: string; content: string; rating: string };
@@ -962,22 +940,9 @@ NOTE: Findings are written to the runbook file when workflow.update() is called.
     label: "Update Workflow",
     description: `Write accumulated findings to workflow.org via supervisor.
 
-PREREQUISITES:
-- Use workflow.init first to create the runbook file
-- Use workflow.appendFinding to accumulate findings before calling update
-- Without prior appendFinding calls, this will return "No findings to write"
-
-IMPORTANT:
-- workflowPath MUST be an EXISTING file (this does NOT create files)
-- workflowPath MUST start with "runbook/" (e.g., "runbook/001-my-project.org")
-- Returns 404 error if file does not exist at specified path
-
-USAGE:
-1. workflow.init({ workflowPath: "runbook/001-my-project.org", projectName: "My Project" })
-2. workflow.appendFinding({ content: "...", rating: "★★★" })  // Call multiple times
-3. workflow.update({ workflowPath: "runbook/001-my-project.org" })  // Writes all findings`,
+Findings are accumulated locally by workflow.appendFinding() calls. This writes all pending findings to the file.`,
     parameters: Type.Object({
-      workflowPath: Type.String({ description: "Path to existing workflow.org file. MUST start with 'runbook/' prefix. File must exist." }),
+      workflowPath: Type.String({ description: "Path to workflow.org file" }),
     }),
     execute: async (_toolCallId, params) => {
       const { workflowPath } = params as { workflowPath: string };
