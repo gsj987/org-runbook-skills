@@ -231,9 +231,22 @@ supervisor.getStatus()
   → Use after failures to debug
 
 worker.spawn(role, task, taskId, workflowPath)
-  → Spawns a worker agent
+  → Spawns a worker agent (PARALLEL mode)
   → Returns: { success, workerId, statusUrl }
   → IMPORTANT: Note the workerId for awaitResult
+
+worker.spawnSequential(tasks, timeout?)
+  → Spawns multiple workers ONE AT A TIME, waiting for each to complete
+  → USE FOR: Tasks with dependencies, sequential steps, ordered execution
+  → Returns: Array of results in order
+  → Example:
+    worker.spawnSequential({
+      tasks: [
+        { role: "ops-agent", task: "Setup", taskId: "s1", workflowPath: "runbook/001-proj.org" },
+        { role: "code-agent", task: "Implement", taskId: "s2", workflowPath: "runbook/001-proj.org", dependsOn: "s1" },
+      ],
+      timeout: 600
+    })
 
 worker.awaitResult(workerId, timeout?)
   → Waits for worker to complete
@@ -244,6 +257,27 @@ worker.status(workerId)
   → Returns: { status, workerId, result? }
   → Status: "running" | "completed"
 ```
+
+### Execution Patterns: Parallel vs Sequential
+
+**USE PARALLEL (spawn + spawn + await + await) WHEN:**
+- Tasks are independent (no dependencies between them)
+- You want faster completion (all run simultaneously)
+- Examples:
+  - Multiple unrelated file edits
+  - Independent test suites
+  - Parallel research on different topics
+
+**USE SEQUENTIAL (spawnSequential) WHEN:**
+- Tasks have dependencies (B requires A's output)
+- Tasks must execute in specific order
+- Deterministic execution is required
+- Examples:
+  - Build → Test → Deploy pipeline
+  - Setup environment → Run tests
+  - Analyze requirements → Generate spec → Implement
+
+**ANTI-PATTERN:** Spawning dependent tasks in parallel and hoping for the best. Always analyze dependencies first.
 
 ### Worker Lifecycle Management (Kill & Restart)
 ```

@@ -94,6 +94,7 @@ const ROLE_TOOLS: Record<string, string[]> = {
     "workflow.update",
     "workflow.init",
     "worker.spawn",
+    "worker.spawnSequential",
     "worker.awaitResult",
     "worker.status",
     "worker.getOutput",
@@ -873,6 +874,129 @@ OPTIONAL PARAMETERS:
       } catch (error) {
         throw new Error(`Failed to await result: ${error}`);
       }
+    },
+  });
+
+  // worker.spawnSequential
+  pi.registerTool({
+    name: "worker.spawnSequential",
+    label: "Spawn Workers Sequentially",
+    description: `Spawn multiple workers one at a time, waiting for each to complete before spawning the next.
+
+USE WHEN:
+- Tasks have dependencies (step 2 requires step 1 output)
+- Tasks must execute in order (A then B then C)
+- You need deterministic execution order
+
+REQUIRED PARAMETERS:
+- tasks: Array of task objects, each with role, task, taskId, workflowPath
+- timeout: Max seconds to wait per task (default: 300)
+
+RETURNS:
+- Array of results, one per task, in order
+- Each result includes workerId, exitCode, findings
+
+EXAMPLE:
+worker.spawnSequential({
+  tasks: [
+    { role: "ops-agent", task: "Setup environment", taskId: "setup-1", workflowPath: "runbook/001-project.org" },
+    { role: "code-agent", task: "Implement feature", taskId: "impl-2", workflowPath: "runbook/001-project.org", dependsOn: "setup-1" },
+  ],
+  timeout: 600
+})`,
+    parameters: Type.Object({
+      tasks: Type.Array(Type.Object({
+        role: Type.String({ description: "Worker role" }),
+        task: Type.String({ description: "Task description" }),
+        taskId: Type.String({ description: "Task ID" }),
+        skill: Type.Optional(Type.String({ description: "Skill path to inject" })),
+        contextFiles: Type.Optional(Type.Array(Type.String(), { description: "Context files" })),
+        workflowPath: Type.String({ description: "Path to workflow.org" }),
+        dependsOn: Type.Optional(Type.String({ description: "Task ID this depends on (for documentation)" })),
+      }), { description: "Array of tasks to execute in order" }),
+      timeout: Type.Optional(Type.Number({ description: "Timeout per task in seconds (default: 300)" })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { tasks, timeout } = params as {
+        tasks: Array<{ role: string; task: string; taskId: string; skill?: string; contextFiles?: string[]; workflowPath: string; dependsOn?: string }>;
+        timeout?: number;
+      };
+
+      if (!tasks || tasks.length === 0) {
+        throw new Error("tasks array is required and cannot be empty");
+      }
+
+      // Ensure supervisor is running
+      if (!await checkSupervisorHealth()) {
+        console.log("⚠️ Supervisor not running, attempting auto-start...");
+        const started = await ensureSupervisorRunning();
+        if (!started) {
+          throw new Error(`Supervisor not available on ${SUPERVISOR_URL}. Could not auto-start.`);
+        }
+      }
+
+      const results: Array<{
+        taskId: string;
+        workerId: string;
+        success: boolean;
+        exitCode?: number;
+        findings?: unknown[];
+        error?: string;
+      }> = [];
+
+      for (const task of tasks) {
+        const config = {
+          role: task.role,
+          task: task.task,
+          taskId: task.taskId,
+          skill: task.skill,
+          contextFiles: task.contextFiles,
+          workflowPath: task.workflowPath,
+        };
+
+        try {
+          // Spawn worker
+          const spawnResponse = await supervisorRequest<{ success: boolean; workerId: string }>("/worker/spawn", {
+            method: "POST",
+            body: JSON.stringify(config),
+          });
+
+          console.log(`[spawnSequential] Spawned ${task.role} for ${task.taskId}, waiting...`);
+
+          // Wait for completion
+          const awaitResponse = await supervisorRequest<{ success: boolean; result?: WorkerResult; error?: string }>(
+            `/worker/${spawnResponse.workerId}/await`,
+            { method: "POST", body: JSON.stringify({ timeout: timeout || 300 }) }
+          );
+
+          results.push({
+            taskId: task.taskId,
+            workerId: spawnResponse.workerId,
+            success: awaitResponse.success,
+            exitCode: awaitResponse.result?.exitCode,
+            findings: awaitResponse.result?.findings,
+          });
+
+        } catch (error) {
+          results.push({
+            taskId: task.taskId,
+            workerId: "failed",
+            success: false,
+            error: String(error),
+          });
+        }
+      }
+
+      return {
+        content: [{ 
+          type: "text", 
+          text: `Sequential execution complete: ${results.filter(r => r.success).length}/${results.length} tasks succeeded` 
+        }],
+        details: {
+          results,
+          checkpoint: `🔗 Sequential: ${results.map(r => `${r.taskId}(${r.success ? '✅' : '❌'})`).join(" → ")}`,
+        },
+      };
     },
   });
 

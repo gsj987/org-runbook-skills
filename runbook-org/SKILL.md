@@ -35,6 +35,8 @@ Org-mode's native TODO keywords (`TODO`, `IN-PROGRESS`, `DONE`, `BLOCKED`, etc.)
 :CREATED: <timestamp>
 :UPDATED: <timestamp>
 :EXIT_CRITERIA: <defined|undefined>
+:DEPENDS_ON: <task-id-1, task-id-2>  # Task IDs this depends on (comma-separated)
+:BLOCKS: <task-id-1, task-id-2>      # Task IDs this blocks
 :END:
 
 - Goal :: <one-sentence description>
@@ -51,6 +53,11 @@ TODO ──claim──> IN-PROGRESS ──complete──> DONE
                   └──block──> BLOCKED ──resume──> IN-PROGRESS
 ```
 
+**Dependency Semantics:**
+- `DEPENDS_ON`: This task cannot start until ALL listed tasks are DONE
+- `BLOCKS`: This task blocks (prevents start of) listed tasks until this is DONE
+- If `DEPENDS_ON` tasks are not DONE, task transitions to BLOCKED automatically
+
 **Recommended TODO Keywords Configuration:**
 ```org
 #+TODO: TODO(t) IN-PROGRESS(i) | DONE(d) BLOCKED(b) CANCELLED(c)
@@ -58,8 +65,12 @@ TODO ──claim──> IN-PROGRESS ──complete──> DONE
 
 **Claim Task Transition:**
 ```
-Before: TODO keyword = TODO, OWNER = unassigned
+Before: TODO keyword = TODO, OWNER = unassigned, all DEPENDS_ON tasks = DONE
 After:  TODO keyword = IN-PROGRESS, OWNER = <agent-code>, UPDATED = now()
+
+If any DEPENDS_ON task is not DONE:
+  → TODO keyword = BLOCKED
+  → Cannot claim until dependencies complete
 ```
 
 ### 2. Finding (发现)
@@ -102,10 +113,26 @@ After:  TODO keyword = IN-PROGRESS, OWNER = <agent-code>, UPDATED = now()
 
 ## Core Actions (Protocol Level)
 
+### check-dependencies
+```
+PROTOCOL: check-dependencies(task-id)
+PRECONDITION: task.ID = task-id exists
+TRANSITION:
+  - Read DEPENDS_ON property
+  - For each dep-task-id:
+    - Check if dep-task TODO keyword = DONE
+OUTPUT:
+  - { canProceed: boolean, blockedBy: task-id[] }
+  - If blockedBy is non-empty, task is BLOCKED until those complete
+```
+
 ### claim-task
 ```
-PROTOCOL: claim-task(task-id, agent-code, strategy, dependencies)
-PRECONDITION: task TODO keyword = TODO AND task.OWNER = unassigned
+PROTOCOL: claim-task(task-id, agent-code, strategy)
+PRECONDITION: 
+  - task TODO keyword = TODO
+  - task.OWNER = unassigned
+  - All tasks in task.DEPENDS_ON have TODO keyword = DONE
 TRANSITION:
   - task.OWNER = agent-code
   - task TODO keyword = IN-PROGRESS
@@ -113,6 +140,7 @@ TRANSITION:
 OUTPUT:
   - Checkpoint written to task node
   - Log: 🔒 <agent> claimed <task-id> with strategy: <strategy>
+  - If DEPENDS_ON not satisfied: error with list of blocking tasks
 ```
 
 ### append-finding
@@ -167,8 +195,13 @@ PRECONDITION:
 TRANSITION:
   - task TODO keyword = DONE
   - task.UPDATED = now()
+  - For each task in workflow where DEPENDS_ON contains task-id:
+    - If all other DEPENDS_ON tasks are also DONE:
+      - Change that task's TODO keyword from BLOCKED to TODO
+      - That task is now unblocked and can be claimed
 OUTPUT:
   - Task marked complete with evidence summary
+  - Dependent tasks unblocked if all their dependencies are now DONE
 ```
 
 ---
