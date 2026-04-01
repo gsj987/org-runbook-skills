@@ -461,12 +461,12 @@ test_tc_err_007() {
     local update_response
     update_response=$(curl -s -X POST "$SUPERVISOR_URL/workflow/update" \
         -H "Content-Type: application/json" \
-        -d '{"path": "'"$nonexistent"'", "findings": ["test"]}' 2>&1)
+        -d '{"workflowPath": "'"$nonexistent"'", "findings": ["test"]}' 2>&1)
     
     local http_code
     http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$SUPERVISOR_URL/workflow/update" \
         -H "Content-Type: application/json" \
-        -d '{"path": "'"$nonexistent"'", "findings": ["test"]}' 2>/dev/null || echo "000")
+        -d '{"workflowPath": "'"$nonexistent"'", "findings": ["test"]}' 2>/dev/null || echo "000")
     
     # Should return error (4xx)
     assert_contains "$http_code" "40" "Should return 4xx error for missing file"
