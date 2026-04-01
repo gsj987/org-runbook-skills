@@ -174,10 +174,6 @@ rm -rf ~/.pi/agent/extensions/pi-adapter
 - TC-WK-023 to TC-WK-028: `worker.getOutput` and `spawnSequential` tests are not implemented
 - TC-WK-021, TC-WK-022: `worker.kill` tests are not implemented
 
-**IMPORTANT**: Error handling tests in `e2e/error-handling.sh` use incorrect field names:
-- Uses `path` instead of `workflowPath` in API calls
-- These tests may pass but don't actually test the API correctly
-
 **Supervisor Restart Behavior**:
 - In-memory results (`state.results`) are lost on restart
 - Disk fallback (`/tmp/pi-adapter-results/`) preserves results across restarts
