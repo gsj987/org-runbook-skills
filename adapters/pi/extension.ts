@@ -271,6 +271,7 @@ interface Task {
 
 interface Finding {
   id: string;
+  taskId: string;
   content: string;
   rating: string;
   timestamp: string;
@@ -844,6 +845,7 @@ Findings are stored locally until workflow.update() is called.`,
 
       const finding: Finding = {
         id: findingId,
+        taskId,
         content,
         rating,
         timestamp,
@@ -995,24 +997,39 @@ This writes all pending findings and status changes to the file.`,
       let findingsWritten = 0;
       let statusChangesWritten = 0;
 
-      // Write findings
-      if (localFindings.length > 0) {
-        try {
-          const findingsResponse = await supervisorRequest<{ success: boolean }>("/workflow/update", {
-            method: "POST",
-            body: JSON.stringify({ workflowPath, findings: localFindings }),
-            context: { workflowPath },
-          });
+      // Convert relative path to absolute path for supervisor
+      const absoluteWorkflowPath = path.isAbsolute(workflowPath) 
+        ? workflowPath 
+        : path.resolve(process.cwd(), workflowPath);
 
-          if (findingsResponse.success) {
-            findingsWritten = localFindings.length;
-            localFindings = [];
-          } else {
-            throw new Error("Failed to write findings to workflow");
-          }
-        } catch (error) {
-          throw new Error(`Failed to update workflow findings: ${error}`);
+      // Write findings - group by taskId and send each group separately
+      if (localFindings.length > 0) {
+        // Group findings by taskId
+        const findingsByTask = new Map<string, Finding[]>();
+        for (const finding of localFindings) {
+          const existing = findingsByTask.get(finding.taskId) || [];
+          existing.push(finding);
+          findingsByTask.set(finding.taskId, existing);
         }
+
+        // Send each group to supervisor
+        for (const [taskId, taskFindings] of findingsByTask) {
+          try {
+            const findingsResponse = await supervisorRequest<{ success: boolean }>("/workflow/update", {
+              method: "POST",
+              body: JSON.stringify({ workflowPath: absoluteWorkflowPath, taskId, findings: taskFindings }),
+              context: { workflowPath },
+            });
+
+            if (!findingsResponse.success) {
+              throw new Error(`Failed to write findings for task ${taskId} to workflow`);
+            }
+            findingsWritten += taskFindings.length;
+          } catch (error) {
+            throw new Error(`Failed to update workflow findings for task ${taskId}: ${error}`);
+          }
+        }
+        localFindings = [];
       }
 
       // Write status changes
@@ -1021,7 +1038,7 @@ This writes all pending findings and status changes to the file.`,
           try {
             const statusResponse = await supervisorRequest<{ success: boolean; noChange?: boolean }>("/workflow/status", {
               method: "POST",
-              body: JSON.stringify({ workflowPath, taskId: change.taskId, status: change.status }),
+              body: JSON.stringify({ workflowPath: absoluteWorkflowPath, taskId: change.taskId, status: change.status }),
               context: { workflowPath },
             });
 
