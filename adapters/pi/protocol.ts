@@ -686,6 +686,13 @@ app.post("/workflow/update", (req, res) => {
   if (findingsArray.length === 0) {
     return res.json({ success: true, message: "No findings to append", findingsWritten: 0 });
   }
+  
+  // If taskId not provided, extract from first finding
+  const effectiveTaskId = taskId || (findingsArray[0]?.taskId);
+  
+  if (!effectiveTaskId) {
+    return res.status(400).json({ error: "Missing taskId - must be provided in body or in findings[0].taskId" });
+  }
 
   try {
     if (!fs.existsSync(workflowPath)) {
@@ -704,7 +711,7 @@ app.post("/workflow/update", (req, res) => {
     let taskEndLine = lines.length;
     
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes(`:ID: ${taskId}`) || lines[i].includes(`:ID:${taskId}`)) {
+      if (lines[i].includes(`:ID: ${effectiveTaskId}`) || lines[i].includes(`:ID:${effectiveTaskId}`)) {
         // Found the task ID - now find the task heading (backtrack)
         for (let j = i; j >= 0; j--) {
           const line = lines[j].trim();
@@ -720,9 +727,9 @@ app.post("/workflow/update", (req, res) => {
     
     if (taskStartLine === -1) {
       return res.status(404).json({ 
-        error: `Task not found: ${taskId}`,
+        error: `Task not found: ${effectiveTaskId}`,
         workflowPath,
-        hint: `No task with ID ${taskId} found in the workflow file`
+        hint: `No task with ID ${effectiveTaskId} found in the workflow file`
       });
     }
     

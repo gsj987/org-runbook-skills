@@ -9,9 +9,9 @@
 # 4. Invalid taskId returns proper error
 # 5. Findings do NOT leak to other tasks' sections
 # =============================================================================
-# POSITIVE: 2 tests (TC-FL-001, TC-FL-002)
-# NEGATIVE: 4 tests (TC-FL-001-N1, TC-FL-001-N2, TC-FL-002-N1, TC-FL-002-N2)
-# TOTAL: 6 tests (ratio 1:2)
+# POSITIVE: 4 tests (TC-FL-001, TC-FL-002, TC-FL-003, TC-FL-004)
+# NEGATIVE: 6 tests (TC-FL-001-N1, TC-FL-001-N2, TC-FL-002-N1, TC-FL-002-N2, TC-FL-003-N1, TC-FL-004-N1)
+# TOTAL: 10 tests (ratio 1:1.5)
 # =============================================================================
 
 set -euo pipefail
@@ -433,7 +433,242 @@ EOF
 }
 
 # =============================================================================
-# NEGATIVE TEST 4: Subtask findings should NOT appear in parent's section
+# POSITIVE TEST 3: taskId can be extracted from findings[0].taskId
+# =============================================================================
+
+test_taskid_extracted_from_findings() {
+    assert_reset
+    test_start "taskId extracted from findings[0].taskId (no explicit taskId in body)" "TC-FL-003"
+    
+    local workflow_path="$TEST_WORKFLOW_DIR/tc-fl-003.org"
+    
+    cat > "$workflow_path" << 'EOF'
+#+title:      Test TaskId Extraction
+#+TODO:       TODO(t) | DONE(d)
+
+* TODO <parent>
+:PROPERTIES:
+:ID: parent-fl-003
+:END:
+- Goal :: Parent
+- Findings ::
+
+*** TODO <subtask>
+:PROPERTIES:
+:ID: subtask-fl-003
+:PARENT: parent-fl-003
+:END:
+- Goal :: Subtask
+- Findings ::
+
+EOF
+
+    # Append finding WITHOUT explicit taskId in body - should extract from findings[0].taskId
+    local response
+    response=$(curl -s -X POST "${SUPERVISOR_URL}/workflow/update" \
+        -H "Content-Type: application/json" \
+        -d '{
+            "workflowPath": "'"$workflow_path"'",
+            "findings": [{
+                "taskId": "subtask-fl-003",
+                "id": "F-taskid-extract-001",
+                "content": "Finding with embedded taskId",
+                "rating": "★★"
+            }]
+        }')
+    
+    # Should succeed (not 400 for missing taskId)
+    if [[ ! "$response" =~ '"success":false' ]] && [[ ! "$response" =~ '"error"' ]]; then
+        echo -e "${GREEN}✓${NC} taskId extracted from findings[0].taskId (no error)"
+    else
+        assert_true "false" "Should extract taskId from findings, got error: $response"
+    fi
+    
+    # Verify finding appears in subtask's section
+    local subtask_line end_line subtask_section
+    subtask_line=$(grep -n "^\\*\\*\\* TODO <subtask>" "$workflow_path" | head -1 | cut -d: -f1)
+    end_line=$(wc -l < "$workflow_path")
+    subtask_section=$(sed -n "${subtask_line},${end_line}p" "$workflow_path")
+    assert_contains "$subtask_section" "F-taskid-extract-001" "Finding ID should be in subtask section"
+    assert_contains "$subtask_section" "Finding with embedded taskId" "Finding content should be in subtask section"
+    
+    rm -f "$workflow_path"
+    
+    if [[ $ASSERT_FAILED -gt 0 ]]; then
+        test_fail "TC-FL-003 failed"
+        return 1
+    fi
+    test_pass
+}
+
+# =============================================================================
+# NEGATIVE TEST 5: Missing taskId everywhere should return error
+# =============================================================================
+
+test_taskid_missing_everywhere() {
+    assert_reset
+    test_start "Missing taskId everywhere returns 400 error" "TC-FL-003-N1"
+    
+    local workflow_path="$TEST_WORKFLOW_DIR/tc-fl-003n1.org"
+    
+    cat > "$workflow_path" << 'EOF'
+#+title:      Test Missing TaskId
+#+TODO:       TODO(t) | DONE(d)
+
+* TODO <parent>
+:PROPERTIES:
+:ID: parent-fl-003n1
+:END:
+- Goal :: Parent
+- Findings ::
+
+*** TODO <subtask>
+:PROPERTIES:
+:ID: subtask-fl-003n1
+:PARENT: parent-fl-003n1
+:END:
+- Goal :: Subtask
+- Findings ::
+
+EOF
+
+    # Try to append finding WITHOUT taskId anywhere (neither in body nor in findings)
+    local response
+    response=$(curl -s -X POST "${SUPERVISOR_URL}/workflow/update" \
+        -H "Content-Type: application/json" \
+        -d '{
+            "workflowPath": "'"$workflow_path"'",
+            "findings": [{
+                "id": "F-no-taskid-001",
+                "content": "No taskId anywhere",
+                "rating": "★"
+            }]
+        }')
+    
+    # Should return 400 error
+    if [[ "$response" =~ '"success":false' ]] || [[ "$response" =~ '"error"' ]] || [[ "$response" =~ 'taskId' ]]; then
+        echo -e "${GREEN}✓${NC} Missing taskId returns error (correct)"
+    else
+        assert_true "false" "Should return error for missing taskId, got: $response"
+    fi
+    
+    rm -f "$workflow_path"
+    
+    if [[ $ASSERT_FAILED -gt 0 ]]; then
+        test_fail "TC-FL-003-N1 failed"
+        return 1
+    fi
+    test_pass
+}
+
+# =============================================================================
+# POSITIVE TEST 4: Absolute path works correctly
+# =============================================================================
+
+test_absolute_path_works() {
+    assert_reset
+    test_start "Absolute workflow path resolves correctly" "TC-FL-004"
+    
+    local workflow_path="$TEST_WORKFLOW_DIR/tc-fl-004.org"
+    local absolute_path="$(cd "$(dirname "$workflow_path")" && pwd)/$(basename "$workflow_path")"
+    
+    cat > "$workflow_path" << 'EOF'
+#+title:      Test Absolute Path
+#+TODO:       TODO(t) | DONE(d)
+
+* TODO <parent>
+:PROPERTIES:
+:ID: parent-fl-004
+:END:
+- Goal :: Parent
+- Findings ::
+
+*** TODO <subtask>
+:PROPERTIES:
+:ID: subtask-fl-004
+:PARENT: parent-fl-004
+:END:
+- Goal :: Subtask
+- Findings ::
+
+EOF
+
+    # Append using absolute path
+    local response
+    response=$(curl -s -X POST "${SUPERVISOR_URL}/workflow/update" \
+        -H "Content-Type: application/json" \
+        -d '{
+            "workflowPath": "'"$absolute_path"'",
+            "taskId": "subtask-fl-004",
+            "findings": [{
+                "id": "F-abs-path-001",
+                "content": "Finding via absolute path",
+                "rating": "★★★"
+            }]
+        }')
+    
+    # Should succeed
+    if [[ ! "$response" =~ '"success":false' ]] && [[ ! "$response" =~ '"error"' ]]; then
+        echo -e "${GREEN}✓${NC} Absolute path accepted (no error)"
+    else
+        assert_true "false" "Should accept absolute path, got error: $response"
+    fi
+    
+    # Verify finding appears in subtask's section
+    local subtask_line end_line subtask_section
+    subtask_line=$(grep -n "^\\*\\*\\* TODO <subtask>" "$workflow_path" | head -1 | cut -d: -f1)
+    end_line=$(wc -l < "$workflow_path")
+    subtask_section=$(sed -n "${subtask_line},${end_line}p" "$workflow_path")
+    assert_contains "$subtask_section" "F-abs-path-001" "Finding should appear in subtask section"
+    
+    rm -f "$workflow_path"
+    
+    if [[ $ASSERT_FAILED -gt 0 ]]; then
+        test_fail "TC-FL-004 failed"
+        return 1
+    fi
+    test_pass
+}
+
+# =============================================================================
+# NEGATIVE TEST 6: Non-existent absolute path returns 404
+# =============================================================================
+
+test_nonexistent_path_returns_404() {
+    assert_reset
+    test_start "Non-existent absolute path returns 404" "TC-FL-004-N1"
+    
+    # Try to update a file that doesn't exist
+    local response
+    response=$(curl -s -X POST "${SUPERVISOR_URL}/workflow/update" \
+        -H "Content-Type: application/json" \
+        -d '{
+            "workflowPath": "/tmp/nonexistent-$(date +%s).org",
+            "taskId": "any-task-id",
+            "findings": [{
+                "id": "F-nonexist-001",
+                "content": "Should not be written",
+                "rating": "★"
+            }]
+        }')
+    
+    # Should return 404
+    if [[ "$response" =~ '404' ]] || [[ "$response" =~ '"success":false' ]]; then
+        echo -e "${GREEN}✓${NC} Non-existent path returns 404 (correct)"
+    else
+        # Maybe it succeeded (which would be wrong), check if file was created
+        assert_true "false" "Should return 404 for non-existent file, got: $response"
+    fi
+    
+    if [[ $ASSERT_FAILED -gt 0 ]]; then
+        test_fail "TC-FL-004-N1 failed"
+        return 1
+    fi
+    test_pass
+}
+
+# =============================================================================
+# NEGATIVE TEST 7: Subtask findings should NOT appear in parent's section
 # =============================================================================
 
 test_findings_not_in_parent() {
@@ -546,6 +781,18 @@ main() {
     echo ""
     
     test_findings_not_in_parent && TESTS_PASSED=$((TESTS_PASSED + 1)) || TESTS_FAILED=$((TESTS_FAILED + 1))
+    echo ""
+    
+    test_taskid_extracted_from_findings && TESTS_PASSED=$((TESTS_PASSED + 1)) || TESTS_FAILED=$((TESTS_FAILED + 1))
+    echo ""
+    
+    test_taskid_missing_everywhere && TESTS_PASSED=$((TESTS_PASSED + 1)) || TESTS_FAILED=$((TESTS_FAILED + 1))
+    echo ""
+    
+    test_absolute_path_works && TESTS_PASSED=$((TESTS_PASSED + 1)) || TESTS_FAILED=$((TESTS_FAILED + 1))
+    echo ""
+    
+    test_nonexistent_path_returns_404 && TESTS_PASSED=$((TESTS_PASSED + 1)) || TESTS_FAILED=$((TESTS_FAILED + 1))
     echo ""
     
     echo "========================================"
