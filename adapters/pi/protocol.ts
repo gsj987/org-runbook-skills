@@ -671,10 +671,20 @@ app.get("/results", (req, res) => {
 });
 
 app.post("/workflow/update", (req, res) => {
-  const { workflowPath, findings } = req.body;
+  const { workflowPath, taskId, findings } = req.body;
 
-  if (!workflowPath || !findings) {
-    return res.status(400).json({ error: "Missing workflowPath or findings" });
+  if (!workflowPath) {
+    return res.status(400).json({ error: "Missing workflowPath" });
+  }
+  
+  // Support both single finding and findings array
+  const findingsArray = findings 
+    ? (Array.isArray(findings) ? findings : [findings])
+    : [];
+  
+  // If no findings provided, return success (no-op)
+  if (findingsArray.length === 0) {
+    return res.json({ success: true, message: "No findings to append", findingsWritten: 0 });
   }
 
   try {
@@ -687,15 +697,140 @@ app.post("/workflow/update", (req, res) => {
     }
 
     let content = fs.readFileSync(workflowPath, "utf-8");
-
-    for (const finding of findings) {
-      const checkpoint = `\n- [${finding.timestamp}] ${finding.id}: ${finding.content} [${finding.rating}]`;
-      content += checkpoint;
+    const lines = content.split("\n");
+    
+    // Find the task by taskId
+    let taskStartLine = -1;
+    let taskEndLine = lines.length;
+    
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].includes(`:ID: ${taskId}`) || lines[i].includes(`:ID:${taskId}`)) {
+        // Found the task ID - now find the task heading (backtrack)
+        for (let j = i; j >= 0; j--) {
+          const line = lines[j].trim();
+          // Match org-mode heading with status (e.g., "*** TODO <title>" or "** IN-PROGRESS <title>")
+          if (/^\*{1,3}\s+(TODO|IN-PROGRESS|DONE|BLOCKED|CANCELLED)\s+</.test(line)) {
+            taskStartLine = j;
+            break;
+          }
+        }
+        break;
+      }
     }
+    
+    if (taskStartLine === -1) {
+      return res.status(404).json({ 
+        error: `Task not found: ${taskId}`,
+        workflowPath,
+        hint: `No task with ID ${taskId} found in the workflow file`
+      });
+    }
+    
+    // Find the end of this task (next heading at same or higher level, or end of file)
+    // Get the level of current task (number of * at start)
+    const taskLevel = (lines[taskStartLine].match(/^\*/) || [""])[0].length;
+    
+    for (let i = taskStartLine + 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      // Check if this is a heading (starts with *)
+      const headingMatch = line.match(/^(\*+)\s+(TODO|IN-PROGRESS|DONE|BLOCKED|CANCELLED)\s+</);
+      if (headingMatch) {
+        const headingLevel = headingMatch[1].length;
+        // If next heading is same level or higher (fewer *), end current task
+        if (headingLevel <= taskLevel) {
+          taskEndLine = i;
+          break;
+        }
+      }
+    }
+    
+    // Find "Findings ::" section within this task's range
+    let findingsSectionLine = -1;
+    for (let i = taskStartLine; i < taskEndLine; i++) {
+      // Match "- Findings ::" or "- Findings::" (with or without space)
+      if (/^-\s+Findings\s*::/.test(lines[i].trim())) {
+        findingsSectionLine = i;
+        break;
+      }
+    }
+    
+    if (findingsSectionLine === -1) {
+      return res.status(404).json({ 
+        error: `Findings section not found in task ${taskId}`,
+        workflowPath,
+        hint: `Task ${taskId} exists but has no "Findings ::" section`
+      });
+    }
+    
+    // Find where to insert new findings:
+    // 1. If there are existing findings (lines starting with "- ["), insert AFTER the last one
+    // 2. Otherwise, insert after "Findings ::" line
+    // 3. But stop before "- Next Actions" or other section headers
+    
+    let insertAfterLine = findingsSectionLine;
+    
+    // Look for existing findings and find the last one
+    // Existing findings have format: "  - [timestamp] F-xxx: content [rating]"
+    // OR they might not be indented (format: "- [timestamp] F-xxx: content [rating]")
+    for (let i = findingsSectionLine + 1; i < taskEndLine; i++) {
+      const line = lines[i].trim();
+      
+      // Stop at section headers or other items
+      // Section headers: "- Next Actions ::", "- Evidence ::", "- Context ::"
+      // Or lines that start a new section (indented or not indented list items that look like headers)
+      if (/^-\s+(Next Actions|Evidence|Context|Goal)::?\s*$/.test(line)) {
+        // We've reached the next section, stop here
+        break;
+      }
+      
+      // Check if this is a finding line (has timestamp format)
+      // Finding format: "- [2026-04-01T12:00:00Z] F-xxx: content [rating]"
+      if (/^-\s+\[/.test(line) || /^  -\s+\[/.test(line)) {
+        // This is a finding line, update insert position
+        insertAfterLine = i;
+        continue;
+      }
+      
+      // If we hit an empty line after findings, that's fine, we'll insert before it
+      if (line === "") {
+        continue;
+      }
+    }
+    
+    // Build finding lines
+    const findingLines: string[] = [];
+    for (const finding of findingsArray) {
+      const timestamp = finding.timestamp || new Date().toISOString();
+      findingLines.push(`  - [${timestamp}] ${finding.id}: ${finding.content} [${finding.rating}]`);
+    }
+    
+    // Split lines at insert position
+    // If insertAfterLine is findingsSectionLine, insert right after "Findings ::"
+    // If insertAfterLine is the last finding, insert after it
+    const beforeInsert = lines.slice(0, insertAfterLine + 1);
+    const afterInsert = lines.slice(insertAfterLine + 1, taskEndLine);
+    const restOfFile = lines.slice(taskEndLine);
+    
+    // Reconstruct: before + newline + findings + after + rest
+    // Add newline before first finding for spacing
+    const newContent = [
+      ...beforeInsert,
+      "",
+      ...findingLines,
+      ...afterInsert,
+      ...restOfFile,
+    ].join("\n");
+    
+    fs.writeFileSync(workflowPath, newContent);
+    
+    log(`📝 Added ${findingsArray.length} finding(s) to task ${taskId}`);
 
-    fs.writeFileSync(workflowPath, content);
-
-    res.json({ success: true, message: "Findings written to workflow" });
+    res.json({ 
+      success: true, 
+      message: `Findings written to task ${taskId}`,
+      findingsWritten: findingsArray.length,
+      taskId,
+    });
   } catch (error) {
     logError(`Failed to update workflow: ${error}`);
     res.status(500).json({ error: String(error) });
