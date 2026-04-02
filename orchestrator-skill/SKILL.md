@@ -1,7 +1,7 @@
 ---
 name: orchestrator-skill
 description: Orchestrator profile defining main agent behavior. Separates orchestration authority from domain execution authority. Activates with @orchestrate.
-depends on: runbook-org, runbook-multiagent
+depends on: runbook-org, runbook-multiagent, exception-routing
 version: 1.1
 ---
 
@@ -234,6 +234,7 @@ worker.spawn(role, task, taskId, workflowPath)
   → Spawns a worker agent (PARALLEL mode)
   → Returns: { success, workerId, statusUrl }
   → IMPORTANT: Note the workerId for awaitResult
+  → taskId should match a subtask headline ID in workflow.org
 
 worker.spawnSequential(tasks, timeout?)
   → Spawns multiple workers ONE AT A TIME, waiting for each to complete
@@ -252,11 +253,34 @@ worker.awaitResult(workerId, timeout?)
   → Waits for worker to complete
   → Returns: { success, result: { findings, artifacts, exitCode } }
   → workerId must match value from spawn
+  → IMPORTANT: After this returns, call workflow.update()!
 
 worker.status(workerId)
   → Returns: { status, workerId, result? }
   → Status: "running" | "completed"
 ```
+
+### Subtask Headlines
+
+Before spawning a worker, you should have a corresponding subtask headline in the runbook:
+
+```org
+*** TODO Research architecture
+:PROPERTIES:
+:ID: research-architecture
+:PARENT: parent-001
+:OWNER: research-agent
+:PHASE: discovery
+:END:
+- Goal :: Research architecture options
+- Context ::
+- Findings :: ← Worker findings go here
+- Evidence ::
+- Next Actions ::
+```
+
+If a subtask headline doesn't exist, create one before spawning the worker.
+The taskId passed to worker.spawn() should match the :ID: property.
 
 ### Execution Patterns: Parallel vs Sequential
 
@@ -321,19 +345,49 @@ workflow.claimTask(taskId, strategy?)
   → Requires task status = TODO
 
 workflow.appendFinding(taskId, content, rating)
-  → Adds finding to task
+  → Adds finding to task's local buffer
   → Rating: "★★★" | "★★" | "★"
+  → NOTE: Findings are stored LOCALLY until workflow.update() is called
 
 workflow.attachEvidence(taskId, findingId, evidence)
   → Links evidence to finding
 
-workflow.setStatus(taskId, status)
+workflow.setStatus(taskId, status, workflowPath?)
   → Sets task status: TODO | IN-PROGRESS | DONE | BLOCKED
+  → QUEUES status change for persistence
+
+workflow.update(workflowPath) ⚠️ CRITICAL FOR FINDINGS PERSISTENCE
+  → Persists ALL pending findings and status changes to workflow.org
+  → MUST be called after collecting worker results
+  → This is the step that was MISSING in previous runs!
 
 workflow.advancePhase(parentTaskId, nextPhase)
   → Advances project to next phase
   → Requires all phase tasks complete
 ```
+
+### Finding Persistence Pattern ⚠️ IMPORTANT
+
+**The orchestrator MUST call workflow.update() to persist findings!**
+
+Correct flow:
+```
+1. worker.spawn(role, task, taskId, workflowPath)  → Spawn worker
+2. worker.awaitResult(workerId)                     → Wait for completion
+3. [Extract findings from result.findings]           → Get worker findings
+4. workflow.appendFinding(taskId, content, rating)   → Queue finding
+5. workflow.setStatus(taskId, "DONE")               → Queue status change
+6. workflow.update(workflowPath)                     ← THIS WRITES TO RUNBOOK!
+```
+
+Anti-pattern (findings will be LOST):
+```
+1. worker.spawn(...)
+2. worker.awaitResult(...)
+3. [No workflow.update() called] ❌ Findings are in memory only!
+```
+
+**Always call workflow.update() after collecting worker results!**
 
 ### File & Git Operations
 ```

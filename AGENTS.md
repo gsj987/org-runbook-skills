@@ -168,12 +168,6 @@ rm -rf ~/.pi/agent/extensions/pi-adapter
 - Before testing `pi` manually with this project
 - After any E2E test that may have installed global packages
 
-### Known Test Coverage Gaps
-
-**IMPORTANT**: Some tests in `e2e/additional-coverage.sh` are stubs (echo statements only):
-- TC-WK-023 to TC-WK-028: `worker.getOutput` and `spawnSequential` tests are not implemented
-- TC-WK-021, TC-WK-022: `worker.kill` tests are not implemented
-
 **Supervisor Restart Behavior**:
 - In-memory results (`state.results`) are lost on restart
 - Disk fallback (`/tmp/pi-adapter-results/`) preserves results across restarts
@@ -188,12 +182,6 @@ rm -rf ~/.pi/agent/extensions/pi-adapter
 - `workflow.init`: Creates workflow.org following schema
 - `workflow.appendFinding`: Stores findings locally until update()
 - `workflow.update`: Writes accumulated findings to file
-
-**Test Suite Status**:
-- `worker-spawn-cycle.sh`: TC-WK-001 to TC-WK-017 pass (16/20)
-- TC-WK-018 (timeout test): fails due to curl --fail option
-- TC-WK-019 (status test): fails due to race condition
-- TC-WK-020 (isolation test): fails due to result file path issues
 
 ### Schema Compliance
 All workflow.org files must follow the schema defined in [[file:examples/schema.md][examples/schema.md]]:

@@ -376,6 +376,8 @@ const PROTECTED_PATHS = [
 let currentRole: string = process.env.PI_ROLE || "orchestrator";
 let taskRegistry = new Map<string, Task>();
 let localFindings: Finding[] = [];
+let pendingStatusChanges: Array<{ taskId: string; status: string }> = [];
+let currentWorkflowPath: string | null = null;
 let supervisorProcess: ChildProcess | null = null;
 let supervisorStartedByThis: boolean = false;
 
@@ -406,9 +408,13 @@ async function ensureSupervisorRunning(): Promise<boolean> {
   return await startSupervisor();
 }
 
+interface SupervisorRequestOptions extends RequestInit {
+  context?: Record<string, any>;
+}
+
 async function supervisorRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: SupervisorRequestOptions = {}
 ): Promise<T> {
   try {
     const response = await fetch(`${SUPERVISOR_URL}${endpoint}`, {
@@ -430,7 +436,8 @@ async function supervisorRequest<T>(
           throw new Error(`Supervisor: worker not found (may still be starting). Try again in a few seconds.`);
         }
         if (requestDesc.includes("/workflow/update")) {
-          throw new Error(`Supervisor: workflow file not found. Check that the workflowPath is correct.`);
+          const ctx = options.context || {};
+          throw new Error(`Supervisor: workflow file not found. workflowPath="${ctx.workflowPath || 'unknown'}"`);
         }
         if (requestDesc.includes("/worker/") && requestDesc.includes("/output")) {
           throw new Error(`Supervisor: worker output not found (may still be running or already cleaned up).`);
@@ -756,6 +763,10 @@ ${phaseGates}
         }
         
         fs.writeFileSync(workflowPath, content);
+        
+        // Set current workflow path for future setStatus calls
+        currentWorkflowPath = workflowPath;
+        
         return {
           content: [{ type: "text", text: `Created workflow at ${workflowPath}` }],
           details: {
@@ -886,14 +897,18 @@ Findings are stored locally until workflow.update() is called.`,
   pi.registerTool({
     name: "workflow.setStatus",
     label: "Set Task Status",
-    description: "Set the status of a task.",
+    description: `Set the status of a task and persist to workflow.org.
+
+Status changes are queued and persisted to the file when workflow.update() is called.`,
     parameters: Type.Object({
       taskId: Type.String({ description: "Task ID" }),
       status: Type.String({ description: "New status: TODO, IN-PROGRESS, DONE, or BLOCKED" }),
+      workflowPath: Type.Optional(Type.String({ description: "Path to workflow.org (auto-detected if not provided)" })),
     }),
     execute: async (_toolCallId, params) => {
-      const { taskId, status } = params as { taskId: string; status: string };
+      const { taskId, status, workflowPath } = params as { taskId: string; status: string; workflowPath?: string };
       
+      // Update local task registry
       const task = taskRegistry.get(taskId);
       if (!task) {
         taskRegistry.set(taskId, {
@@ -907,11 +922,19 @@ Findings are stored locally until workflow.update() is called.`,
         taskRegistry.set(taskId, task);
       }
 
+      // Queue status change for persistence
+      // Use provided workflowPath or fall back to currentWorkflowPath
+      const targetPath = workflowPath || currentWorkflowPath;
+      if (targetPath) {
+        pendingStatusChanges.push({ taskId, status });
+      }
+
       return {
         content: [{ type: "text", text: `Task ${taskId} status set to ${status}` }],
         details: {
           success: true,
           checkpoint: `📋 Task ${taskId}: ${status}`,
+          note: targetPath ? `Status change queued for ${targetPath}` : "No workflow path set - status will not be persisted",
         },
       };
     },
@@ -942,14 +965,24 @@ Findings are stored locally until workflow.update() is called.`,
   pi.registerTool({
     name: "workflow.update",
     label: "Update Workflow",
-    description: `Write accumulated findings to workflow.org via supervisor.
+    description: `Write accumulated findings and status changes to workflow.org via supervisor.
 
-Findings are accumulated locally by workflow.appendFinding() calls. This writes all pending findings to the file.`,
+Findings are accumulated locally by workflow.appendFinding() calls.
+Status changes are queued by workflow.setStatus() calls.
+This writes all pending findings and status changes to the file.`,
     parameters: Type.Object({
-      workflowPath: Type.String({ description: "Path to workflow.org file" }),
+      workflowPath: Type.String({ description: "Path to workflow.org file (relative to project root)" }),
     }),
     execute: async (_toolCallId, params) => {
       const { workflowPath } = params as { workflowPath: string };
+      
+      // Update the current workflow path for future setStatus calls
+      currentWorkflowPath = workflowPath;
+      
+      // Check if file exists first - provides better error message
+      if (!fs.existsSync(workflowPath)) {
+        throw new Error(`Workflow file not found: ${workflowPath}. Use workflow.init() first to create the workflow, or check the path is correct (relative to project root).`);
+      }
       
       // Ensure supervisor is running
       if (!await checkSupervisorHealth()) {
@@ -959,32 +992,57 @@ Findings are accumulated locally by workflow.appendFinding() calls. This writes 
         }
       }
       
-      if (localFindings.length === 0) {
-        return {
-          content: [{ type: "text", text: "No findings to write" }],
-          details: { success: true, findingsWritten: 0 },
-        };
-      }
+      let findingsWritten = 0;
+      let statusChangesWritten = 0;
 
-      try {
-        const response = await supervisorRequest<{ success: boolean }>("/workflow/update", {
-          method: "POST",
-          body: JSON.stringify({ workflowPath, findings: localFindings }),
-        });
+      // Write findings
+      if (localFindings.length > 0) {
+        try {
+          const findingsResponse = await supervisorRequest<{ success: boolean }>("/workflow/update", {
+            method: "POST",
+            body: JSON.stringify({ workflowPath, findings: localFindings }),
+            context: { workflowPath },
+          });
 
-        if (response.success) {
-          const count = localFindings.length;
-          localFindings = [];
-          return {
-            content: [{ type: "text", text: `Written ${count} findings to workflow` }],
-            details: { success: true, findingsWritten: count },
-          };
-        } else {
-          throw new Error("Failed to write to workflow");
+          if (findingsResponse.success) {
+            findingsWritten = localFindings.length;
+            localFindings = [];
+          } else {
+            throw new Error("Failed to write findings to workflow");
+          }
+        } catch (error) {
+          throw new Error(`Failed to update workflow findings: ${error}`);
         }
-      } catch (error) {
-        throw new Error(`Failed to update workflow: ${error}`);
       }
+
+      // Write status changes
+      if (pendingStatusChanges.length > 0) {
+        for (const change of pendingStatusChanges) {
+          try {
+            const statusResponse = await supervisorRequest<{ success: boolean; noChange?: boolean }>("/workflow/status", {
+              method: "POST",
+              body: JSON.stringify({ workflowPath, taskId: change.taskId, status: change.status }),
+              context: { workflowPath },
+            });
+
+            if (statusResponse.success && !statusResponse.noChange) {
+              statusChangesWritten++;
+            }
+          } catch (error) {
+            console.error(`Failed to update status for task ${change.taskId}: ${error}`);
+          }
+        }
+        pendingStatusChanges = [];
+      }
+
+      return {
+        content: [{ type: "text", text: `Written ${findingsWritten} findings and ${statusChangesWritten} status changes to workflow` }],
+        details: { 
+          success: true, 
+          findingsWritten,
+          statusChangesWritten,
+        },
+      };
     },
   });
 
@@ -1031,7 +1089,10 @@ IMPORTANT: Orchestrator should use this tool instead of attempting domain work d
         }
       }
 
-      const config = { role, task, taskId, skill, contextFiles, workflowPath };
+      // Pass project directory explicitly so workers run in the correct location
+      // This is critical when supervisor is auto-started from a different directory
+      const projectDir = process.cwd();
+      const config = { role, task, taskId, skill, contextFiles, workflowPath, projectDir };
 
       try {
         const response = await supervisorRequest<{ success: boolean; workerId: string; statusUrl: string }>("/worker/spawn", {
@@ -1232,6 +1293,7 @@ worker.spawnSequential({
           skill: task.skill,
           contextFiles: task.contextFiles,
           workflowPath: task.workflowPath,
+          projectDir: process.cwd(),  // Pass project directory for correct worker cwd
         };
 
         try {

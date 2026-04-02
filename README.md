@@ -1,116 +1,162 @@
-# OpenClaw Skills — Skill Index
+# org-runbook-skills
 
-> All skills are located at `<skill-name>/SKILL.md`
-> All workflows are located at `workflows/<workflow-name>/SKILL.md`
+> Structured task management for [pi](https://github.com/mariozechner/pi) using org-mode files.
 
----
-
-## Trigger Words (Canonical Entry Points)
-
-> ⚠️ Use **exact trigger words** to activate skills. Generic words like "skill" or "runbook" may misfire.
-
-| You Say | Activated | Type | Path |
-|---------|-----------|------|------|
-| `@runbook-org` | Single agent task execution | **Skill** | `runbook-org/SKILL.md` |
-| `@runbook-multi` | Multi-agent orchestration | **Skill** | `runbook-multiagent/SKILL.md` |
-| `@research` | Multi-role research workflow | **Workflow** | `runbook-brainstorm/SKILL.md` |
-| `@orchestrate` | Orchestrator profile with exception routing | **Skill** | `orchestrator-skill/SKILL.md` |
+This project provides skills that enable multi-agent orchestration with org-mode state machines, exception routing, and deterministic workflow tracking.
 
 ---
 
-## Skill vs Workflow Distinction
+## Quick Start
 
-| Type | Definition | Purpose |
-|------|-----------|---------|
-| **Skill** | Protocol for specific operation | Teaches agent "how to modify org state" |
-| **Workflow** | Template for organizing research tasks | Teaches orchestrator "how to organize a research type" |
+### 1. Deploy to Your Project
 
-**Currently:**
-- `runbook-org` → Skill (base operations)
-- `runbook-multiagent` → Skill (orchestration protocol)
-- `orchestrator-skill` → Skill (orchestrator profile)
-- `runbook-brainstorm` → Workflow template (research harness)
-
-**Future directory structure:**
-```
-skills/
-  runbook-org/         # Base operations skill
-  runbook-multiagent/  # Orchestration skill
-  orchestrator-skill/  # Orchestrator profile skill
-workflows/
-  brainstorm-research/ # Research workflow template
+```bash
+./deploy.sh --project .
 ```
 
----
+This deploys skills and the pi-adapter extension to your project's `.pi/` directory.
 
-## Design Principle: TODO Keywords Over :STATUS: Property
+### 2. Deploy Globally
 
-Org-mode's native TODO keywords are the **primary state mechanism**. We use them instead of redundant `:STATUS:` properties.
-
-**Recommended org file header:**
-```org
-#+TODO: TODO(t) IN-PROGRESS(i) | DONE(d) BLOCKED(b) CANCELLED(c)
+```bash
+./deploy.sh --global
 ```
 
-**Benefits:**
-- Leverages org-mode's built-in state machine
-- Automatic org-nature features (agenda, TODO statistics)
-- No duplication between TODO keyword and :STATUS:
+Installs skills and adapter to `~/.pi/agent/` for use across all projects.
+
+### 3. Start Using
+
+```bash
+pi
+```
+
+Then use trigger words in your session:
+
+| Trigger | Purpose |
+|---------|---------|
+| `@runbook-org` | Single agent task execution |
+| `@orchestrate` | Multi-agent orchestrator |
+| `@exception` | Exception handling |
 
 ---
 
-## Skill 1: runbook-org (Base Layer)
+## Deployment Options
 
-**Path:** `runbook-org/SKILL.md`  
-**Activation:** `@runbook-org`
+| Command | Target | Use Case |
+|---------|--------|----------|
+| `./deploy.sh --project .` | `.pi/` in current dir | Project-local installation |
+| `./deploy.sh --project ~/myproj` | `.pi/` in specific project | Deploy to another project |
+| `./deploy.sh --global` | `~/.pi/agent/` | Global installation |
+| `./deploy.sh --remove` | Remove from project | Clean up deployment |
 
-**Purpose:** Single agent task execution with **state machine semantics**.
+**Flags:**
+- `--force` — Overwrite existing skills
+- `--remove` — Remove skills and adapter from project
 
-**Core Primitives:**
-| Primitive | What It Does |
-|-----------|-------------|
-| `claim-task(task-id, agent, strategy)` | Transitions task to IN-PROGRESS with owner |
+### What Deploy Does
+
+**Project mode (`--project`):**
+- Copies skills to `.pi/skills/`
+- Deploys pi-adapter to `.pi/extensions/pi-adapter/`
+- Runs `npm install` for adapter dependencies
+- Updates `.pi/settings.json`
+
+**Global mode (`--global`):**
+- Copies skills to `~/.pi/agent/skills/`
+- Deploys pi-adapter to `~/.pi/agent/extensions/pi-adapter/`
+- Installs adapter dependencies
+
+---
+
+## Project Structure
+
+```
+org-runbook-skills/
+├── deploy.sh                  # Deployment script
+├── runbook/                   # Project runbooks (not in git)
+│   ├── 000-runbook-template.org  # Template
+│   └── 001-my-project.org       # Project runbooks
+├── runbook-org/              # Base operations skill
+│   └── SKILL.md
+├── runbook-multiagent/       # Orchestration skill
+│   └── SKILL.md
+├── orchestrator-skill/       # Orchestrator profile
+│   └── SKILL.md
+├── runbook-brainstorm/       # Research workflow
+│   └── SKILL.md
+├── exception-routing/        # Exception taxonomy
+│   └── SKILL.md
+├── adapters/
+│   └── pi/                   # pi adapter extension
+│       ├── extension.ts      # Supervisor extension
+│       └── protocol.ts       # Worker protocol
+└── examples/
+    ├── schema.md             # Object definitions
+    └── workflow.org          # Example runbook
+```
+
+---
+
+## Skills Overview
+
+### Trigger Words
+
+| Trigger | Activation | Path |
+|---------|-----------|------|
+| `@runbook-org` | Single agent task | `runbook-org/SKILL.md` |
+| `@runbook-multi` | Multi-agent orchestration | `runbook-multiagent/SKILL.md` |
+| `@orchestrate` | Orchestrator profile | `orchestrator-skill/SKILL.md` |
+| `@research` | Research workflow | `runbook-brainstorm/SKILL.md` |
+| `@exception` | Exception handling | `exception-routing/SKILL.md` |
+
+### Skill vs Workflow
+
+| Type | Definition |
+|------|-----------|
+| **Skill** | Protocol for specific operation (how to modify org state) |
+| **Workflow** | Template for organizing research tasks (how to organize a research type) |
+
+---
+
+## Core Skills
+
+### runbook-org (Base Layer)
+
+Single agent task execution with state machine semantics.
+
+**Primitives:**
+| Primitive | Purpose |
+|-----------|---------|
+| `claim-task(task-id, agent)` | Transitions to IN-PROGRESS |
 | `append-finding(task-id, content, rating)` | Creates F-<uuid> finding |
-| `attach-evidence(finding-id, type, source)` | Links E-<uuid> evidence to finding |
-| `advance-phase(task-id, next-phase)` | Moves task through discovery→acceptance |
-| `complete-task(task-id)` | Marks DONE when exit conditions met |
+| `attach-evidence(finding-id, type, source)` | Links E-<uuid> evidence |
+| `complete-task(task-id)` | Marks DONE |
 
-**State Machine (TODO Keywords):**
+**State Machine:**
 ```
 TODO ──claim──> IN-PROGRESS ──complete──> DONE
                   │
                   └──block──> BLOCKED ──resume──> IN-PROGRESS
 ```
 
----
+### runbook-multiagent (Orchestration Layer)
 
-## Skill 2: runbook-multiagent (Orchestration Layer)
+Multi-agent orchestration with protocol/runtime separation.
 
-**Path:** `runbook-multiagent/SKILL.md`  
-**Activation:** `@runbook-multi`
-
-**Purpose:** Multi-agent orchestration with **protocol/runtime separation**.
-
-**Core Protocol:**
+**Protocol:**
 1. Design task tree (parent + children with PHASE/EXIT_CRITERIA)
 2. Spawn sub-agents with output contracts
-3. Wait for completion (host's callback mechanism)
+3. Wait for completion
 4. Merge findings (preserve F-<uuid> traceability)
 5. Phase gating and exception routing
 
-**Orchestrator Non-Execution Rule:**
-The orchestrator MUST NOT directly perform specialist work. It must delegate to appropriate role.
+**Rule:** The orchestrator MUST NOT directly perform specialist work. It must delegate.
 
----
+### orchestrator-skill (Orchestrator Profile)
 
-## Skill 3: orchestrator-skill (Orchestrator Profile)
+Defines orchestrator behavior, exception handling, and phase-driven orchestration.
 
-**Path:** `orchestrator-skill/SKILL.md`  
-**Activation:** `@orchestrate`
-
-**Purpose:** Defines orchestrator behavior profile, exception handling, and phase-driven orchestration.
-
-**Orchestrator Allowed Actions:**
+**Allowed Actions:**
 - Phase control
 - Task decomposition
 - Routing (classify + dispatch)
@@ -118,95 +164,45 @@ The orchestrator MUST NOT directly perform specialist work. It must delegate to 
 - Exception dispatch
 - Completion gating
 
-**Exception Routing Matrix (Phase × Exception × Role):**
+### exception-routing
 
-| Phase | Exception | Delegate Role | Expected Output |
-|-------|-----------|---------------|-----------------|
-| test | impl-bug | code-agent | patch + changed files |
-| test | flaky-test | test-agent | repro + root cause |
+Exception classification and routing matrix.
+
+| Phase | Exception | Delegate | Output |
+|-------|-----------|----------|--------|
+| test | impl-bug | code-agent | patch + files |
+| test | flaky-test | test-agent | repro + cause |
 | integration | api-mismatch | integration-agent | mismatch report |
-| deploy-check | config-error | ops-agent | config diff + steps |
-| acceptance | requirement-gap | pm-agent | clarified criteria |
+| deploy-check | config-error | ops-agent | config diff |
+| acceptance | requirement-gap | pm-agent | criteria clarification |
 
 ---
 
-## Workflow: runbook-brainstorm (Research Harness)
+## Agent Roles
 
-**Path:** `runbook-brainstorm/SKILL.md`  
-**Activation:** `@research`
+### Core Roles
 
-**Purpose:** Complete multi-role research workflow template.
-
-**Round Design:**
-| Rounds | Use When | Roles |
-|--------|----------|-------|
-| 2 | Single goal, clear scope | 1-2 roles |
-| 3 | Multiple modules, cross-domain | 3+ roles |
-
-**Role Templates (Technical Research):**
-| Role | Direction | Output Contract |
-|------|-----------|-----------------|
+| Role | Responsibility | Output Contract |
+|------|---------------|-----------------|
 | arch-agent | System architecture, module boundaries | Module boundaries, call chains, risks |
-| deps-agent | Dependency availability, tech stack | Availability, version constraints, alternatives |
-| impl-agent | Implementation path, effort | Implementation plan, effort estimate |
+| pm-agent | User needs, feature design | PRD, priorities, acceptance criteria |
+| ux-agent | Page flow, component states | UI specs, interaction specs |
+| code-agent | Code implementation | Code artifacts with tests |
+| test-agent | Unit/integration tests | Test results, coverage report |
+| ops-agent | Deployment, CI/CD | Deploy checklist, release plan |
+| deps-agent | Dependency analysis | Availability, constraints, alternatives |
+| research-agent | Tech research, competitive analysis | Research report with evidence |
 
-**Role Templates (Product Research):**
-| Role | Direction | Output Contract |
-|------|-----------|-----------------|
-| pm-agent | User needs, feature scope | PRD, priorities |
-| ux-agent | Interaction design, page flow | UI specs, component states |
-| tech-agent | Technical feasibility, API design | Technical proposal |
+### Extended Roles
 
----
-
-## Agent → Skill Registry
-
-When spawning sub-agents, the **orchestrator injects skills based on role code**. Sub-agents don't auto-load; the orchestrator informs them in spawn prompt.
-
-### Spawn Prompt Standard Format
-
-```
-Agent: <role-code>
-Task: <specific-goal>
-Skill: <skill-path>  ← Injected by orchestrator
-Context files: <files-to-read>
-Org file: <org-file-path>
-Your task ID: <task-id>
-Output Contract: <what this role must deliver>
-```
-
-### Core Roles (Universal)
-
-| Agent Code | Trigger Keywords | Responsibility | Output Contract | Minimum Skill |
-|------------|------------------|----------------|-----------------|---------------|
-| arch-agent | architecture, module, system design | System architecture, module boundaries, call paths | Module boundaries, call chains, risk points | runbook-org |
-| pm-agent | product, requirements, PRD, features | User needs, feature design | PRD, priorities, acceptance criteria | runbook-org |
-| ux-agent | UX, interaction, UI, user experience | Page flow, component states | UI specs, interaction specs | runbook-org |
-| research-agent | research, survey, technology selection | Tech research, competitive analysis | Research report with evidence | runbook-org |
-| code-agent | implement, write code, development | Code implementation, function design | Code artifacts with test coverage | runbook-org |
-| test-agent | test, test cases, coverage, E2E | Unit tests, integration tests | Test results, coverage report | runbook-org |
-| deps-agent | dependencies, package management | Dependency availability, version analysis | Availability, constraints, alternatives | runbook-org |
-| deploy-agent | deployment, DevOps, CI/CD | Deployment architecture, pipeline | Deploy checklist, release plan | runbook-org |
-
-### Technical Roles (Extended by Domain)
-
-| Agent Code | Trigger Keywords | Responsibility | Output Contract | Minimum Skill |
-|------------|------------------|----------------|-----------------|---------------|
-| api-agent | API, interface, REST | API design, contracts | API specs, contract definitions | runbook-org |
-| data-agent | data, database, storage | Data models, DB design | Data model, schema definitions | runbook-org |
-| security-agent | security, permissions, auth | Security design, compliance | Security analysis, permission model | runbook-org |
-| perf-agent | performance, optimization | Performance analysis | Bottleneck report, optimization plan | runbook-org |
-| infra-agent | infrastructure, operations, monitoring | Infrastructure, alerts | Infrastructure diagram, runbooks | runbook-org |
-| integration-agent | integration, API mismatch | Integration testing | Integration report, mismatch fixes | runbook-org |
-
-### Output Contract Column Purpose
-
-> **Why add output contracts?**
-> Without explicit output contracts, merge relies on orchestrator interpretation. With output contracts, each role delivers **structured, predictable artifacts** that can be merged deterministically.
-
-**Example:**
-- arch-agent without contract → "architecture analysis"
-- arch-agent with contract → "Module: auth, api-gateway | Calls: auth → api-gateway → user-service | Risks: session storage, token refresh"
+| Role | Responsibility |
+|------|---------------|
+| api-agent | API design, contracts |
+| data-agent | Data models, DB design |
+| security-agent | Security design, compliance |
+| perf-agent | Performance analysis |
+| infra-agent | Infrastructure, monitoring |
+| integration-agent | Integration testing |
 
 ---
 
@@ -224,81 +220,85 @@ Each phase:
 
 ---
 
-## Usage in Codex / Claude Code / pi
+## Design Principle: TODO Keywords Over :STATUS:
 
-These tools don't auto-read skills; reference paths in spawn prompts:
+Org-mode's native TODO keywords are the **primary state mechanism**.
 
+**Recommended header:**
+```org
+#+TODO: TODO(t) IN-PROGRESS(i) | DONE(d) BLOCKED(b) CANCELLED(c)
 ```
-Reference skill: /path-to-skills/runbook-org/SKILL.md
-Reference skill: /path-to-skills/runbook-multiagent/SKILL.md
-Reference skill: /path-to-skills/runbook-brainstorm/SKILL.md
-```
 
-Just attach the path, don't copy the full content.
+**Benefits:**
+- Leverages org-mode's built-in state machine
+- Automatic org-nature features (agenda, TODO statistics)
+- No duplication between TODO keyword and :STATUS:
 
 ---
 
-## Directory Structure
+## Runbook Management
 
-```
-org-runbook-skills/
-├── README.md                 # This file
-├── .gitignore               # Git ignore rules
-├── runbook-org/             # Base operations skill
-│   └── SKILL.md
-├── runbook-multiagent/      # Orchestration skill
-│   └── SKILL.md
-├── orchestrator-skill/     # Orchestrator profile
-│   └── SKILL.md
-├── runbook-brainstorm/      # Research workflow (moves to workflows/)
-│   └── SKILL.md
-├── exception-routing.md     # Exception taxonomy and routing
-└── examples/                # Complete project examples
-    ├── schema.md            # Object definitions
-    └── workflow.org         # Full execution trace
+### Rules
 
-# Future structure:
-skills/
-  runbook-org/
-  runbook-multiagent/
-  orchestrator-skill/
-workflows/
-  brainstorm-research/
+1. All runbooks MUST be in `runbook/` directory
+2. Naming: `runbook/<sequence>-<project-name>.org`
+3. Sequence numbers MUST be sequential (001, 002, 003...)
+4. Never create `workflow.org` at root level
 
-# Ignored by .gitignore (process management):
-#   runbook.org               # Runtime task tracking
-#   R*_*.md                   # Brainstorm/thinking documents
-#   output/                   # Generated outputs
+### Example
+
+```org
+#+TODO: TODO(t) IN-PROGRESS(i) | DONE(d) BLOCKED(b)
+#+FILETAGS: my-project
+
+* TODO Implement feature X
+  :PROPERTIES:
+  :AGENT: code-agent
+  :PHASE: implementation
+  :EXIT_CRITERIA: Code complete, tests passing
+  :END:
 ```
 
 ---
 
-## Migration Guide
+## pi Adapter
+
+The pi-adapter extension (`adapters/pi/`) enables:
+
+- Supervisor auto-starts on port 3847
+- Workers spawn as child processes
+- Protocol-based communication between supervisor and workers
+
+**No compilation needed** — runs via `npx ts-node --esm`
+
+---
+
+## Examples
+
+See `examples/` for:
+
+- `schema.md` — Formal object definitions
+- `workflow.org` — Complete execution trace
+
+---
+
+## Migration
 
 ### v1.x → v2.0
 
 | Old | New |
 |-----|-----|
-| "skills / skill / runbook" triggers | `@runbook-org`, `@runbook-multi`, `@research` |
-| Finding as log entry | Finding with F-<uuid>, can be referenced |
-| Evidence as list item | Evidence with E-<uuid>, must link to finding |
+| Generic triggers | `@runbook-org`, `@runbook-multi`, `@research` |
+| Log entry findings | F-<uuid> findings with ratings |
+| List evidence | E-<uuid> evidence linked to findings |
 | Done when "finished" | Done when exit conditions met |
-| `subagent_announce` hardcoded | "host's callback mechanism" |
-| "15+ min" timing | "host-defined threshold" |
-| No exception handling | Exception classification + routing matrix |
-| No non-execution rule | Explicit Orchestrator Non-Execution Rule |
-| README role table | Role table with output contracts |
+| No exception handling | Exception classification + routing |
+| No orchestrator rule | Explicit Non-Execution Rule |
 
 ### v2.0 → v2.1
 
-| Old (v2.0) | New (v2.1) |
-|-------------|------------|
-| `:STATUS:` property in task Properties | Use org-mode TODO keyword instead |
-| `STATUS: in-progress` | `IN-PROGRESS` keyword |
-| `STATUS: done` | `DONE` keyword |
-| `STATUS: blocked` | `BLOCKED` keyword |
-
-**Recommended org file header:**
-```org
-#+TODO: TODO(t) IN-PROGRESS(i) | DONE(d) BLOCKED(b) CANCELLED(c)
-```
+| Old | New |
+|-----|-----|
+| `:STATUS:` property | org-mode TODO keyword |
+| `STATUS: in-progress` | `IN-PROGRESS` |
+| `STATUS: done` | `DONE` |

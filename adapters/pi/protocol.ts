@@ -199,6 +199,7 @@ interface SpawnRequest {
   skill?: string;
   contextFiles?: string[];
   workflowPath: string;
+  projectDir?: string;  // Explicit project directory (passed from extension)
 }
 
 interface WorkerResult {
@@ -279,14 +280,24 @@ function spawnWorker(config: SpawnRequest, workerId: string): ChildProcess {
 
   log(`🚀 Spawning ${role} worker (${workerId})`);
 
-  // Use process.cwd() as base since __dirname may be '.' in ts-node
-  // process.cwd() returns .pi/extensions/pi-adapter when supervisor starts from there
-  // Project root is 3 levels up (.pi -> project)
-  const baseDir = process.cwd();
-  const cwd = path.resolve(baseDir, "..", "..", "..");
-  
-  log(`   Supervisor cwd: ${baseDir}`);
-  log(`   Worker working directory: ${cwd}`);
+  // Use projectDir from config if provided (passed from extension)
+  // Fall back to calculating from process.cwd() if not provided
+  // projectDir is the absolute path to the project root where runbook/ lives
+  let cwd: string;
+  if (config.projectDir && fs.existsSync(config.projectDir)) {
+    cwd = config.projectDir;
+    log(`   Using explicit projectDir: ${cwd}`);
+  } else {
+    // Legacy fallback: calculate from supervisor's process.cwd()
+    // Assumes supervisor runs from .pi/extensions/pi-adapter
+    const baseDir = process.cwd();
+    cwd = path.resolve(baseDir, "..", "..", "..");
+    log(`   Supervisor cwd: ${baseDir}`);
+    log(`   Worker working directory (calculated): ${cwd}`);
+    if (!config.projectDir) {
+      logWarn(`   No projectDir provided, using calculated cwd. Workers may run in wrong directory!`);
+    }
+  }
   
   const worker = spawn(PI_COMMAND, args, {
     stdio: ["ignore", "pipe", "pipe"],
@@ -668,7 +679,11 @@ app.post("/workflow/update", (req, res) => {
 
   try {
     if (!fs.existsSync(workflowPath)) {
-      return res.status(404).json({ error: "Workflow file not found" });
+      return res.status(404).json({ 
+        error: "Workflow file not found",
+        workflowPath,
+        hint: `File does not exist: ${workflowPath}`
+      });
     }
 
     let content = fs.readFileSync(workflowPath, "utf-8");
@@ -686,6 +701,137 @@ app.post("/workflow/update", (req, res) => {
     res.status(500).json({ error: String(error) });
   }
 });
+
+// Update task status in workflow.org file
+// Changes TODO/IN-PROGRESS/DONE/BLOCKED keyword for a specific task ID
+app.post("/workflow/status", (req, res) => {
+  const { workflowPath, taskId, status } = req.body;
+
+  if (!workflowPath || !taskId || !status) {
+    return res.status(400).json({ error: "Missing workflowPath, taskId, or status" });
+  }
+
+  // Validate status is one of the allowed keywords
+  const validStatuses = ["TODO", "IN-PROGRESS", "DONE", "BLOCKED", "CANCELLED"];
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({ 
+      error: `Invalid status: ${status}`,
+      validStatuses,
+    });
+  }
+
+  try {
+    if (!fs.existsSync(workflowPath)) {
+      return res.status(404).json({ 
+        error: "Workflow file not found",
+        workflowPath,
+        hint: `File does not exist: ${workflowPath}`
+      });
+    }
+
+    let content = fs.readFileSync(workflowPath, "utf-8");
+
+    // First, verify the task ID exists in the file
+    const idPattern = new RegExp(`:ID:\\s+${escapeRegExp(taskId)}\\s*\n`, "m");
+    if (!idPattern.test(content)) {
+      return res.status(404).json({ 
+        error: `Task not found: ${taskId}`,
+        workflowPath,
+        hint: `No task with ID ${taskId} found in the workflow file`
+      });
+    }
+
+    // Find the position of :ID: taskId
+    const idMatch = content.match(idPattern);
+    if (!idMatch || !idMatch.index) {
+      return res.status(404).json({ error: `Could not locate task ID ${taskId}` });
+    }
+    const idPos = idMatch.index;
+
+    // Find the start of the properties block containing this ID
+    // Walk backwards from the ID position to find ":PROPERTIES:"
+    let propsStart = content.lastIndexOf(":PROPERTIES:", idPos);
+    if (propsStart === -1) {
+      return res.status(500).json({ error: "Malformed task: no :PROPERTIES: before :ID:" });
+    }
+
+    // Find the heading line before :PROPERTIES:
+    // The heading is the line with *** or ** and TODO/IN-PROGRESS/etc
+    // that comes before :PROPERTIES:
+    let headingStart = content.lastIndexOf("\n", propsStart - 1);
+    if (headingStart > 0) {
+      headingStart++; // Skip the newline
+    }
+    
+    // Find the actual start of the heading line (after any leading whitespace/newlines)
+    const contentBeforeProps = content.substring(0, propsStart);
+    const lines = contentBeforeProps.split("\n");
+    let headingLineIndex = lines.length - 1;
+    
+    // Find the heading line with a status keyword
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const line = lines[i].trim();
+      // Match patterns like "*** TODO", "** IN-PROGRESS", "* DONE"
+      if (/^\*+ (TODO|IN-PROGRESS|DONE|BLOCKED|CANCELLED)/.test(line)) {
+        headingLineIndex = i;
+        break;
+      }
+    }
+
+    // Get the heading line
+    const headingLine = lines[headingLineIndex];
+    
+    // Check if already has the desired status
+    const currentStatus = headingLine.match(/^\*+ (TODO|IN-PROGRESS|DONE|BLOCKED|CANCELLED)/)?.[1];
+    if (currentStatus === status) {
+      return res.json({ 
+        success: true, 
+        message: `Task already has status ${status}`,
+        taskId,
+        status,
+        noChange: true,
+      });
+    }
+
+    // Replace the status keyword
+    const newHeadingLine = headingLine.replace(
+      /^\*+ (TODO|IN-PROGRESS|DONE|BLOCKED|CANCELLED)/,
+      (match) => match.replace(currentStatus!, status)
+    );
+
+    // Reconstruct the file content
+    lines[headingLineIndex] = newHeadingLine;
+    const newContent = lines.join("\n") + content.substring(propsStart);
+
+    fs.writeFileSync(workflowPath, newContent);
+
+    log(`📝 Task ${taskId} status: ${currentStatus} → ${status}`);
+
+    res.json({ 
+      success: true, 
+      message: `Task ${taskId} status updated to ${status}`,
+      taskId,
+      oldStatus: currentStatus,
+      newStatus: status,
+    });
+  } catch (error) {
+    logError(`Failed to update task status: ${error}`);
+    res.status(500).json({ error: String(error) });
+  }
+});
+
+// Helper: Escape special regex characters
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Helper: Create regex pattern for matching any status
+function statusRegex(status?: string): string {
+  if (status) {
+    return status.replace(/-/g, "\\-");
+  }
+  return "(TODO|IN-PROGRESS|DONE|BLOCKED|CANCELLED)";
+}
 
 app.get("/workers", (req, res) => {
   const workers = Array.from(state.workers.entries()).map(([id, ws]) => ({
