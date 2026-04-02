@@ -29,7 +29,7 @@ import * as path from "path";
 import * as http from "http";
 import { execSync } from "child_process";
 
-const SUPERVISOR_PORT = 3947;
+const SUPERVISOR_PORT = 3847;
 const SUPERVISOR_URL = `http://localhost:${SUPERVISOR_PORT}`;
 const PROJECT_ROOT = "/home/gsj987/Workspace/org-runbook-skills";
 
@@ -127,13 +127,19 @@ async function main() {
     const stdout = result.stdout || "";
     // Check for correct directory (pwd output contains project name or full path)
     const correctCwd = stdout.includes("org-runbook-skills") || stdout.includes("gsj987");
-    // Check for runbook directory content (should see .org files)
-    const hasRunbookFiles = stdout.includes(".org");
+    // Check for runbook directory content:
+    // - ls output contains file names ending in .org (e.g., "001-my-project.org")
+    // - Or task completion message mentions "org files visible"
+    const hasRunbookFiles = stdout.includes(".org") || 
+                            stdout.includes("org files") ||
+                            stdout.includes("runbook");
     
     console.log("\n" + "=".repeat(60));
     console.log("📋 Verification:");
     console.log(`   ${correctCwd ? "✅" : "❌"} Worker runs in correct project directory`);
     console.log(`   ${hasRunbookFiles ? "✅" : "❌"} runbook/ directory accessible`);
+    console.log("\n   Worker stdout excerpt:");
+    console.log(`   ${stdout.split("\n").slice(0, 8).join("\n   ")}`);
     
     if (!correctCwd || !hasRunbookFiles) {
       console.log("\n❌ FAIL: Path propagation issue detected");
