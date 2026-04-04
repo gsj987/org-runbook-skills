@@ -199,14 +199,145 @@ When an action is invalid, the Referee returns a structured retry envelope:
 }
 ```
 
-## Future Phases
+## Phase 4: Loop Driver
+
+The Loop Driver manages the outer orchestration loop:
+
+```typescript
+import { createLoopDriver } from './referee/loop-driver.ts';
+
+const driver = createLoopDriver();
+
+// Initialize for a workflow
+const state = driver.initialize("runbook/001-test.org", "parent-001", "discovery");
+
+// Get orchestrator input
+const input = driver.getOrchestratorInput("runbook/001-test.org", "parent-001");
+console.log("Current phase:", input.currentPhase);
+console.log("Child tasks:", input.childTasks);
+
+// Process an action
+const result = driver.processAction(action, validationResult, orgState);
+if (result.waitReason === 'blocked') {
+  console.log("Loop paused - waiting for:", result.waitReason);
+}
+
+// Handle child completion
+const completion = driver.handleChildCompletion("impl-001", "completed");
+if (completion.shouldRestartLoop) {
+  console.log("Recommended action:", completion.action);
+}
+```
+
+### Loop States
+
+| State | Description |
+|-------|-------------|
+| `active` | Loop running normally |
+| `waiting` | Waiting for child completion or user input |
+| `blocked` | Task blocked by external dependency |
+| `completed` | Terminal state reached |
+| `failed` | Max turns exceeded or fatal error |
+
+### Wait Reasons
+
+| Reason | Description |
+|--------|-------------|
+| `child-completion` | Waiting for child task to complete |
+| `user-decision` | Waiting for user to choose option |
+| `external-input` | Waiting for external system |
+| `blocked` | Task is blocked |
+| `loop-active` | Normal loop operation |
+
+## Phase 5: Fallback Approval
+
+The Fallback Approval System ensures orchestrator direct execution is always explicit and audited:
+
+```typescript
+import { 
+  createOrchestratorFallbackValidator,
+  createFallbackApprovalHandler 
+} from './referee/fallback-approval.ts';
+
+// Create validator
+const validator = createOrchestratorFallbackValidator();
+
+// Detect fallback attempts
+const result = validator.validateOrchestratorFallback(orchestratorOutput, {
+  parentTaskId: "parent-001",
+  currentPhase: "implementation",
+  orgState: currentState,
+});
+
+if (result.isFallbackAttempt) {
+  // Generate approval request
+  const request = validator.generateFallbackRequest(
+    "parent-001",
+    "Implement security feature",
+    { currentPhase: "implementation", orgState: currentState }
+  );
+  // Present to user...
+}
+
+// Process user decision
+const decision = validator.processDecision(requestId, {
+  decision: 'approve',
+  approvedBy: 'user@example.com',
+});
+
+// Execute approved fallback
+if (validator.canExecuteFallback(requestId)) {
+  const result = validator.executeFallback(requestId, {
+    success: true,
+    output: 'Feature implemented',
+  });
+}
+
+// Generate audit log
+const auditLog = validator.generateAuditLog("parent-001");
+```
+
+### Fallback Types
+
+| Type | Description |
+|------|-------------|
+| `no-suitable-role` | No role definition exists |
+| `role-unavailable` | Role exists but not available |
+| `emergency-intervention` | Urgent fix required |
+| `degraded-mode` | System in degraded state |
+| `direct-execution` | Orchestrator attempting direct work |
+
+### Approval Options
+
+| Option | Description |
+|--------|-------------|
+| `fallback-approve` | Allow orchestrator to perform work directly |
+| `fallback-reject` | Reject - find alternative approach |
+| `fallback-defer` | Defer decision to later |
+
+### Audit Trail
+
+Every fallback request maintains a complete audit trail:
+- Request created
+- Decision made (with approver/rejector)
+- Execution (if approved)
+- All timestamps
+
+### Direct Execution Detection
+
+The system automatically detects when orchestrator output looks like direct execution:
+- Code blocks with implementation
+- "Here's the implementation" patterns
+- Git diff patches
+- Direct fix claims
+
+## Future Enhancements
 
 | Phase | Features |
 |-------|----------|
-| Phase 2 | Specialist content detection, role boundary enforcement |
-| Phase 3 | Phase gate policy engine |
-| Phase 4 | Loop driver for automatic re-entry |
 | Phase 5 | Fallback approval flow |
+| Phase 6 | Multi-task orchestration |
+| Phase 7 | Cross-workflow dependencies |
 
 ## See Also
 

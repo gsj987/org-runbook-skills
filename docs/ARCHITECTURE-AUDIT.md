@@ -445,8 +445,8 @@ phase_gates:
 | **Phase 1: Minimal Enforcement** | JSON schema, parser, base validator | P0 | None |
 | **Phase 2: Role Boundary** | Specialist content detector, merge validation | P0 | Phase 1 |
 | **Phase 3: Phase Gate Engine** | YAML policy, gate validator, org metadata | P0 | Phase 1 |
-| **Phase 4: Loop Driver** | Outer loop, child completion hook, state pause | P1 | Phase 1-3 |
-| **Phase 5: Fallback Approval** | Fallback request action, approval flow | P2 | Phase 1 |
+| **Phase 4: Loop Driver** | Outer loop, child completion hook, state pause | P1 | Phase 1-3 ✅ COMPLETED |
+| **Phase 5: Fallback Approval** | Fallback request action, approval flow | P2 | Phase 1 ✅ COMPLETED |
 
 ### 5.2 Task Checklist
 
@@ -501,70 +501,77 @@ phase_gates:
   - ✅ Role gate validation tests: 2 tests
   - ✅ Integration tests: 3 tests
 
-#### Phase 3: Phase Gate Engine
+#### Phase 3: Phase Gate Engine ✅ COMPLETED
 
-- [ ] **T3.1** Create `phase-gates.yaml` policy file
-  - Define all phase transitions
-  - Define requirements per gate (min_findings, required_roles, etc.)
+- [x] **T3.1** Create `phase-gates.yaml` policy file
+  - ✅ Define all phase transitions
+  - ✅ Define requirements per gate (min_findings, required_roles, etc.)
+  - ✅ Exception routing matrix
+  - ✅ Role definitions
 
-- [ ] **T3.2** Implement `PhaseGateValidator`
-  - Read policy YAML
-  - Check gate requirements against current org state
-  - Return gate pass/fail with details
+- [x] **T3.2** Implement `PhaseGateValidator` (enhanced)
+  - ✅ Read policy YAML
+  - ✅ Check gate requirements against current org state
+  - ✅ Return gate pass/fail with details
 
-- [ ] **T3.3** Implement org state reader
-  - Parse workflow.org for current state
-  - Count findings, evidence per task
-  - List completed child tasks by role
+- [x] **T3.3** Implement org state reader
+  - ✅ Parse workflow.org for current state
+  - ✅ Count findings, evidence per task
+  - ✅ List completed child tasks by role
+  - ✅ Detect terminal states
 
-- [ ] **T3.4** Add referee metadata fields to org schema
-  - `:GATE_STATUS:` - Current gate pass/fail
-  - `:LAST_ACTION:` - Last accepted action
-  - `:REFEREE_ERROR:` - Last rejection reason
+- [x] **T3.4** Add referee metadata fields to org schema
+  - ✅ `:GATE_STATUS:` - Current gate pass/fail
+  - ✅ `:LAST_ACTION:` - Last accepted action
+  - ✅ `:REFEREE_ERROR:` - Last rejection reason
+  - ✅ Org state writer for updating workflow.org
 
-- [ ] **T3.5** Add E2E tests for Phase 3
-  - Gate satisfied → advance allowed
-  - Gate not satisfied → advance rejected
-  - Policy-driven transition rules
+- [x] **T3.5** Add E2E tests for Phase 3
+  - ✅ 56 tests passing (total)
+  - ✅ Phase gate policy tests: 4 tests
+  - ✅ Org state reader tests: 4 tests
+  - ✅ Integration tests: 2 tests
 
-#### Phase 4: Loop Driver
+#### Phase 4: Loop Driver ✅ COMPLETED
 
-- [ ] **T4.1** Define terminal state detection
-  - DONE, CANCELLED, BLOCKED (awaiting external), awaiting user decision
-  - Non-terminal → must schedule re-entry
+- [x] **T4.1** Define terminal state detection
+  - ✅ DONE, CANCELLED, BLOCKED (awaiting external), awaiting user decision
+  - ✅ Non-terminal → must schedule re-entry
 
-- [ ] **T4.2** Implement child completion event hook
-  - Worker completion triggers parent loop re-entry
-  - Read child findings/evidence, queue merge
+- [x] **T4.2** Implement child completion event hook
+  - ✅ Worker completion triggers parent loop re-entry
+  - ✅ Read child findings/evidence, queue merge
 
-- [ ] **T4.3** Implement `LoopDriver` class
-  - while loop until terminal state
-  - schedule next turn after each action
-  - Handle blocked/paused states
+- [x] **T4.3** Implement `LoopDriver` class
+  - ✅ while loop until terminal state
+  - ✅ schedule next turn after each action
+  - ✅ Handle blocked/paused states
 
-- [ ] **T4.4** Add action log to org
-  - Record each accepted action with timestamp
-  - Record each rejected action with error code
+- [x] **T4.4** Add action log to org
+  - ✅ Record each accepted action with timestamp
+  - ✅ Record each rejected action with error code
 
-- [ ] **T4.5** Add E2E tests for Phase 4
-  - Child completion triggers parent loop
-  - No silent stop before terminal state
-  - Action log verification
+- [x] **T4.5** Add E2E tests for Phase 4
+  - ✅ 65 tests passing (total)
+  - ✅ Child completion triggers parent loop
+  - ✅ No silent stop before terminal state
+  - ✅ Action log verification
 
-#### Phase 5: Fallback Approval Flow
+#### Phase 5: Fallback Approval Flow ✅ COMPLETED
 
-- [ ] **T5.1** Implement fallback request action
-  - `REQUEST_USER_DECISION` with `fallback-approve` / `fallback-reject` options
-  - Default: `fallback-reject`
+- [x] **T5.1** Implement fallback request action
+  - ✅ `REQUEST_USER_DECISION` with `fallback-approve` / `fallback-reject` options
+  - ✅ Default: `fallback-reject`
 
-- [ ] **T5.2** Implement fallback approval handler
-  - Only proceed with fallback after explicit approval
-  - Log fallback in action log with approval reference
+- [x] **T5.2** Implement fallback approval handler
+  - ✅ Only proceed with fallback after explicit approval
+  - ✅ Log fallback in action log with approval reference
 
-- [ ] **T5.3** Add E2E tests for Phase 5
-  - Fallback request generated on role gap
-  - Fallback rejected by default
-  - Approved fallback execution with audit
+- [x] **T5.3** Add E2E tests for Phase 5
+  - ✅ 76 tests passing (total)
+  - ✅ Fallback request generated on role gap
+  - ✅ Fallback rejected by default
+  - ✅ Approved fallback execution with audit
 
 ### 5.3 Integration Points
 

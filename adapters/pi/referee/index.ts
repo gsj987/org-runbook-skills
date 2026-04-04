@@ -112,7 +112,88 @@ export {
   DEFAULT_PHASE_GATE_POLICY,
 } from "./role-gate-validator.js";
 
+// Phase 3: Phase Gate Policy Loader
+export {
+  loadPhaseGatePolicy,
+  clearPolicyCache,
+  getRoleDefinition,
+  getExceptionRouting,
+  isTerminalPhase,
+  getNextPhase,
+  getPhaseRequirements,
+  type PhaseGatePolicyConfig,
+  type PhaseGateDefinition,
+  type ExceptionRoutingEntry,
+} from "./phase-gate-policy.js";
+
+// Phase 3: Org State Reader/Writer
+export {
+  readOrgState,
+  parseOrgContent,
+  getChildTasks,
+  getCompletedChildTasks,
+  getCompletedChildTasksByRole,
+  countFindings,
+  countEvidence,
+  getEvidenceTypes,
+  calculateAverageFindingRating,
+  isTerminalState,
+  getTaskSummary,
+  type OrgParseResult,
+} from "./org-state-reader.js";
+
+export {
+  writeAcceptedAction,
+  writeRejection,
+  updateGateStatus,
+  createWorkflowOrg,
+  type RefereeMetadata,
+  type ActionLogEntry,
+  type WriteResult,
+} from "./org-state-writer.js";
+
 export type { ValidatorConfig } from "./validator.js";
+
+// Phase 5: Fallback Approval
+export {
+  ExceptionClassifier,
+  createExceptionClassifier,
+  FallbackRequestGenerator,
+  createFallbackRequestGenerator,
+  FallbackApprovalHandler,
+  createFallbackApprovalHandler,
+  OrchestratorFallbackValidator,
+  createOrchestratorFallbackValidator,
+  type FallbackType,
+  type FallbackApprovalStatus,
+  type FallbackRequest,
+  type FallbackAuditEntry,
+  type FallbackValidationResult,
+  type FallbackApprovalConfig,
+  type FallbackDecision,
+  type FallbackExecutionResult,
+  DEFAULT_FALLBACK_CONFIG,
+} from "./fallback-approval.js";
+
+// Phase 4: Loop Driver
+export {
+  LoopDriver,
+  createLoopDriver,
+  WorkflowStateTracker,
+  createWorkflowStateTracker,
+  NextStepDecider,
+  createNextStepDecider,
+  ChildCompletionHandler,
+  createChildCompletionHandler,
+  type LoopTurn,
+  type LoopState,
+  type LoopDecision,
+  type OrchestratorInput,
+  type ChildCompletionEvent,
+  type LoopDriverConfig,
+  type WaitReason,
+  DEFAULT_LOOP_DRIVER_CONFIG,
+} from "./loop-driver.js";
 
 // ============================================================
 // Referee Facade
