@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "pi extension for org-runbook-skills",
   "type": "module",
+  "main": "extension.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test:referee": "npx ts-node --esm ../../e2e/referee.test.ts",
+    "supervisor": "npx ts-node --esm protocol.ts",
+    "lint": "echo \"Linting not configured\""
+  },
   "dependencies": {
     "@sinclair/typebox": "^0.34.49",
     "express": "^4.22.1"
