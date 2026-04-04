@@ -1,6 +1,7 @@
 # Referee Implementation Audit
 
 > **Audit Date**: 2026-03-30  
+> **Last Updated**: 2026-03-30 (G1-G4 gap fixes applied)  
 > **Scope**: Referee/Gatekeeper Adapter (Phase 1-5) vs PRD Requirements  
 > **Reference**: [[file:../docs/ARCHITECTURE-AUDIT.md][Architecture Audit]] | PRD Chapter [[* TODO (与GPT讨论) 对当前流程稳定性的重新约束][Stability Constraints]]
 
@@ -13,7 +14,7 @@
 | PRD Requirement | Status | Implementation |
 |-----------------|--------|----------------|
 | Layer 4 Architecture | ✅ Complete | `adapters/pi/referee/` |
-| 6 Allowed Actions | ✅ Complete | `types/referee.ts`, `parser.ts` |
+| 6 Allowed Actions (+2 optional) | ✅ Complete | `types/referee.ts`, `parser.ts` (+G4) |
 | A1-A4: Output Legality | ✅ Complete | `parser.ts`, `validator.ts` |
 | B1-B3: Role Boundary | ✅ Complete | `specialist-detector.ts`, `citation-validator.ts`, `role-gate-validator.ts` |
 | C1-C5: State Validity | ✅ Complete | `validator.ts`, `org-state-reader.ts` |
@@ -22,7 +23,7 @@
 | Fallback Redesign | ✅ Complete | `fallback-approval.ts` |
 | Org Integration | ✅ Complete | `org-state-writer.ts` |
 
-**Overall Alignment**: 95% - Core requirements met, minor gaps in edge cases.
+**Overall Alignment**: **100%** - All requirements met including G1-G4 gap fixes.
 
 ### 1.2 Test Coverage
 
@@ -30,7 +31,17 @@
 |-------|-------|--------|
 | Unit Tests (Phase 1-5) | 76 | ✅ Passing |
 | Integration Tests (Layer 2) | 62 | ✅ Passing |
-| **Total** | **138** | ✅ All Passing |
+| Gap Tests (G1-G4) | 21 | ✅ Passing |
+| **Total** | **159** | ✅ All Passing |
+
+### 1.3 Gap Fixes Implemented (2026-03-30)
+
+| Gap | Severity | Description | Status |
+|-----|----------|-------------|--------|
+| G1 | Medium | D3 (no-op detection) strictly enforced | ✅ Complete |
+| G2 | Low | `parent_updates` validation | ✅ Complete |
+| G3 | Low | `allowed_evidence_types` strictly enforced | ✅ Complete |
+| G4 | Low | `CANCEL_TASK` / `REPLAN_SUBTASKS` actions | ✅ Complete |
 
 ---
 
@@ -98,9 +109,9 @@
 |------|-------------|----------------|--------|
 | D1 | No silent stop | `loop-driver.ts` - `decideNext()` | ✅ |
 | D2 | Terminal states | `org-state-reader.ts` - `isTerminalState()` | ✅ |
-| D3 | Every accepted action must change state | `loop-driver.ts` - state tracking | ⚠️ Partial |
+| D3 | Every accepted action must change state | `validator.ts` - `validateNoOpDetection()` | ✅ G1 |
 
-**Gap**: D3 (no-op detection) is tracked but not strictly enforced.
+**Gap**: All gaps fixed (G1-G4 implemented).
 
 ### 2.4 Section 9: Phase Gate Policy
 
@@ -117,10 +128,7 @@
 | `min_findings`, `min_evidence` | ✅ | ✅ |
 | `completed_child_roles` | ✅ | ✅ |
 | Exception routing matrix | ✅ | ✅ |
-
-**Gap**: `allowed_evidence_types` in policy not strictly validated.
-
-### 2.5 Section 10: Fallback Redesign
+| `allowed_evidence_types` | ✅ | ✅ G3 |
 
 | PRD Requirement | Implementation | Status |
 |-----------------|----------------|--------|
@@ -413,14 +421,16 @@ if (currentRole === "orchestrator") {
 | 05-fallback-approval.test.ts | 13 | (mock data) |
 | **Total** | **62** | 8 fixtures |
 
-### 6.3 Missing Test Cases
+### 6.3 Gap Test Coverage (e2e/referee-gaps.test.ts)
 
-| Category | Missing Tests |
-|----------|---------------|
-| D3 No-op detection | TC-D3-001 to TC-D3-003 |
-| Evidence type validation | TC-EVID-001 to TC-EVID-002 |
-| MERGE parent_updates | TC-MERGE-001 |
-| Cancel/Replan actions | TC-OPT-001 to TC-OPT-002 |
+| Category | Tests | Status |
+|----------|-------|--------|
+| G1: No-Op Detection | TC-D3-001 to TC-D3-004 | ✅ 4 tests |
+| G2: parent_updates | TC-MERGE-001 to TC-MERGE-003 | ✅ 3 tests |
+| G3: Evidence Types | TC-EVID-001 to TC-EVID-003 | ✅ 3 tests |
+| G4: Cancel/Replan | TC-OPT-001 to TC-OPT-008 | ✅ 8 tests |
+| Integration | TC-INT-GAP-001 to TC-INT-GAP-003 | ✅ 3 tests |
+| **Total** | **21** | ✅ All Passing |
 
 ---
 
@@ -451,14 +461,14 @@ cd adapters/pi && npx tsx ../../e2e/referee.test.ts
 
 ### 8.1 Alignment Summary
 
-The Referee/Gatekeeper Adapter implementation aligns with **95%** of the PRD requirements:
+The Referee/Gatekeeper Adapter implementation aligns with **100%** of the PRD requirements:
 
 | Category | Compliance |
 |----------|------------|
 | Architecture | 100% |
-| Action Schemas | 95% |
-| Enforcement Rules (A-D) | 95% |
-| Phase Gate Policy | 100% |
+| Action Schemas | 100% (G4: CANCEL_TASK, REPLAN_SUBTASKS) |
+| Enforcement Rules (A-D) | 100% (G1: D3 no-op detection) |
+| Phase Gate Policy | 100% (G3: evidence type validation) |
 | Fallback Redesign | 100% |
 | Loop Driver | 100% |
 | Org Integration | 100% |
@@ -477,9 +487,9 @@ The Referee/Gatekeeper Adapter implementation aligns with **95%** of the PRD req
 
 ### 8.3 Next Steps
 
-1. **Immediate** (Low effort): Add missing test cases for gaps G1-G4
-2. **Short-term** (Medium effort): Implement strict no-op detection (G1)
-3. **Long-term** (Low priority): Add CANCEL_TASK / REPLAN_SUBTASKS actions (G4)
+1. **Completed**: G1-G4 gap fixes implemented and tested (21 new tests)
+2. **In Progress**: Layer 3 simulation tests (TC-SIM-*)
+3. **Future**: Real pi session integration tests (TC-PI-*)
 
 ---
 
