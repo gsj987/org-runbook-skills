@@ -274,14 +274,17 @@ export class RoleGateValidator {
       });
     }
     
-    // Check evidence types
+    // Check evidence types (G3: Now enforced as error in strict mode)
     const allowedTypes = gate.requires.allowed_evidence_types;
     if (allowedTypes && allowedTypes.length > 0) {
       const invalidTypes = evidenceTypes.filter(t => !allowedTypes.includes(t));
       if (invalidTypes.length > 0) {
-        warnings.push(
-          `Evidence types [${invalidTypes.join(", ")}] not in allowed types [${allowedTypes.join(", ")}]`
-        );
+        // In strict mode, invalid evidence types are errors
+        errors.push({
+          code: "EVIDENCE_TYPE_NOT_ALLOWED",
+          message: `Evidence types [${invalidTypes.join(", ")}] not allowed for ${fromPhase} phase. Allowed types: [${allowedTypes.join(", ")}]`,
+          path: "payload.gate_basis.evidence_refs",
+        });
       }
     }
     

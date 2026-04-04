@@ -162,6 +162,12 @@ export class ActionValidator {
       // Rule C4: Merge validity (child must be DONE)
       const mergeErrors = this.validateMergePreconditions(action);
       errors.push(...mergeErrors);
+
+      // Rule D3: No-op detection (only in strict mode)
+      if (this.config.strictMode) {
+        const noOpErrors = this.validateNoOpDetection(action);
+        errors.push(...noOpErrors);
+      }
     }
     
     // ========================================
@@ -282,6 +288,70 @@ export class ActionValidator {
       case "ADVANCE_PHASE":
         this.validateAdvanceFields(action, errors);
         break;
+      case "CANCEL_TASK":
+        this.validateCancelTaskFields(action, errors);
+        break;
+      case "REPLAN_SUBTASKS":
+        this.validateReplanFields(action, errors);
+        break;
+    }
+
+    // G2: Validate MERGE parent_updates if present
+    if (action.action === "MERGE_SUBTASK_RESULT" && action.payload.parent_updates) {
+      const parentUpdatesErrors = this.validateParentUpdates(action.payload.parent_updates);
+      errors.push(...parentUpdatesErrors);
+    }
+
+    return errors;
+  }
+
+  private validateParentUpdates(parentUpdates: any): ValidationError[] {
+    const errors: ValidationError[] = [];
+
+    if (!parentUpdates) return errors;
+
+    // Validate findings_append
+    if (parentUpdates.findings_append !== undefined) {
+      if (!Array.isArray(parentUpdates.findings_append)) {
+        errors.push({
+          code: "INVALID_PARENT_UPDATES",
+          message: "parent_updates.findings_append must be an array",
+          path: "payload.parent_updates.findings_append",
+        });
+      } else {
+        for (let i = 0; i < parentUpdates.findings_append.length; i++) {
+          const finding = parentUpdates.findings_append[i];
+          if (typeof finding !== "string" && typeof finding !== "object") {
+            errors.push({
+              code: "INVALID_PARENT_UPDATES",
+              message: `parent_updates.findings_append[${i}] must be a string or object`,
+              path: `payload.parent_updates.findings_append[${i}]`,
+            });
+          }
+        }
+      }
+    }
+
+    // Validate next_actions_append
+    if (parentUpdates.next_actions_append !== undefined) {
+      if (!Array.isArray(parentUpdates.next_actions_append)) {
+        errors.push({
+          code: "INVALID_PARENT_UPDATES",
+          message: "parent_updates.next_actions_append must be an array",
+          path: "payload.parent_updates.next_actions_append",
+        });
+      } else {
+        for (let i = 0; i < parentUpdates.next_actions_append.length; i++) {
+          const action_item = parentUpdates.next_actions_append[i];
+          if (typeof action_item !== "string" && typeof action_item !== "object") {
+            errors.push({
+              code: "INVALID_PARENT_UPDATES",
+              message: `parent_updates.next_actions_append[${i}] must be a string or object`,
+              path: `payload.parent_updates.next_actions_append[${i}]`,
+            });
+          }
+        }
+      }
     }
 
     return errors;
@@ -358,6 +428,76 @@ export class ActionValidator {
         message: `Invalid to_phase: ${payload.to_phase}`,
         path: "payload.to_phase",
       });
+    }
+  }
+
+  /**
+   * G4: Validate CANCEL_TASK fields
+   */
+  private validateCancelTaskFields(action: any, errors: ValidationError[]): void {
+    const { payload } = action;
+
+    if (!payload.task_id || payload.task_id.trim() === "") {
+      errors.push({
+        code: "INVALID_TASK_ID",
+        message: "task_id cannot be empty for CANCEL_TASK",
+        path: "payload.task_id",
+      });
+    }
+
+    if (!payload.reason || payload.reason.trim().length < 10) {
+      errors.push({
+        code: "INVALID_REASON",
+        message: "CANCEL_TASK requires a reason of at least 10 characters",
+        path: "payload.reason",
+      });
+    }
+  }
+
+  /**
+   * G4: Validate REPLAN_SUBTASKS fields
+   */
+  private validateReplanFields(action: any, errors: ValidationError[]): void {
+    const { payload } = action;
+
+    if (!Array.isArray(payload.current_tasks)) {
+      errors.push({
+        code: "INVALID_TASK_ID",
+        message: "current_tasks must be an array",
+        path: "payload.current_tasks",
+      });
+    }
+
+    if (!Array.isArray(payload.new_plan)) {
+      errors.push({
+        code: "INVALID_TASK_ID",
+        message: "new_plan must be an array",
+        path: "payload.new_plan",
+      });
+    } else if (payload.new_plan.length === 0) {
+      errors.push({
+        code: "INVALID_TASK_ID",
+        message: "new_plan cannot be empty",
+        path: "payload.new_plan",
+      });
+    } else {
+      for (let i = 0; i < payload.new_plan.length; i++) {
+        const plan = payload.new_plan[i];
+        if (!plan.task_id) {
+          errors.push({
+            code: "INVALID_TASK_ID",
+            message: `new_plan[${i}].task_id is required`,
+            path: `payload.new_plan[${i}].task_id`,
+          });
+        }
+        if (!plan.role) {
+          errors.push({
+            code: "INVALID_ROLE",
+            message: `new_plan[${i}].role is required`,
+            path: `payload.new_plan[${i}].role`,
+          });
+        }
+      }
     }
   }
 
@@ -542,6 +682,51 @@ export class ActionValidator {
       }
     }
     return false;
+  }
+  
+  /**
+   * Rule D3: No-Op Detection
+   * 
+   * In strict mode, detects actions that don't change observable state:
+   * - ADVANCE_PHASE with same phase
+   * - MERGE without new findings or evidence
+   */
+  private validateNoOpDetection(action: OrchestratorAction): ValidationError[] {
+    const errors: ValidationError[] = [];
+
+    if (!this.orgState) return errors;
+
+    const parentTask = this.orgState.tasks.get(action.parent_task_id);
+    if (!parentTask) return errors;
+
+    // Check ADVANCE_PHASE with same phase
+    if (action.action === "ADVANCE_PHASE") {
+      const { from_phase, to_phase } = action.payload;
+      if (from_phase === to_phase) {
+        errors.push({
+          code: "NO_STATE_CHANGE",
+          message: `ADVANCE_PHASE cannot transition ${from_phase} -> ${to_phase} (no change)`,
+          path: "payload",
+        });
+      }
+    }
+
+    // Check MERGE without new findings or evidence
+    if (action.action === "MERGE_SUBTASK_RESULT") {
+      const { finding_refs, evidence_refs } = action.payload;
+      const hasFindings = finding_refs && finding_refs.length > 0;
+      const hasEvidence = evidence_refs && evidence_refs.length > 0;
+      
+      if (!hasFindings && !hasEvidence) {
+        errors.push({
+          code: "NO_STATE_CHANGE",
+          message: "MERGE must add at least one finding or evidence reference",
+          path: "payload",
+        });
+      }
+    }
+
+    return errors;
   }
 }
 

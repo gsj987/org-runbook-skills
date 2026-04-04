@@ -210,6 +210,10 @@ export class ActionParser {
         return this.parseBlockerAction(parsed, base);
       case "REQUEST_USER_DECISION":
         return this.parseDecisionAction(parsed, base);
+      case "CANCEL_TASK":
+        return this.parseCancelAction(parsed, base);
+      case "REPLAN_SUBTASKS":
+        return this.parseReplanAction(parsed, base);
       default:
         return {
           success: false,
@@ -451,6 +455,101 @@ export class ActionParser {
           question: payload.question,
           options: payload.options || [],
           default: payload.default || "",
+        },
+      },
+    };
+  }
+
+  /**
+   * G4: Parse CANCEL_TASK action
+   */
+  private parseCancelAction(
+    parsed: any,
+    base: any
+  ): { success: true; action: any } | { success: false; error: ParseResult["error"] } {
+    const payload = parsed.payload;
+    
+    if (!payload) {
+      return {
+        success: false,
+        error: {
+          code: "PARSE_ERROR",
+          message: 'CANCEL_TASK requires "payload" field',
+        },
+      };
+    }
+
+    if (!payload.task_id) {
+      return {
+        success: false,
+        error: {
+          code: "PARSE_ERROR",
+          message: 'CANCEL_TASK payload requires "task_id"',
+        },
+      };
+    }
+
+    return {
+      success: true,
+      action: {
+        ...base,
+        action: "CANCEL_TASK",
+        payload: {
+          task_id: payload.task_id,
+          reason: payload.reason || "",
+          alternatives: payload.alternatives || [],
+        },
+      },
+    };
+  }
+
+  /**
+   * G4: Parse REPLAN_SUBTASKS action
+   */
+  private parseReplanAction(
+    parsed: any,
+    base: any
+  ): { success: true; action: any } | { success: false; error: ParseResult["error"] } {
+    const payload = parsed.payload;
+    
+    if (!payload) {
+      return {
+        success: false,
+        error: {
+          code: "PARSE_ERROR",
+          message: 'REPLAN_SUBTASKS requires "payload" field',
+        },
+      };
+    }
+
+    if (!payload.new_plan || !Array.isArray(payload.new_plan)) {
+      return {
+        success: false,
+        error: {
+          code: "PARSE_ERROR",
+          message: 'REPLAN_SUBTASKS payload requires "new_plan" array',
+        },
+      };
+    }
+
+    // Parse new plan items
+    const newPlan = payload.new_plan.map((item: any) => ({
+      task_id: item.task_id || "",
+      title: item.title || "",
+      role: item.role || "",
+      depends_on: item.depends_on || [],
+    }));
+
+    return {
+      success: true,
+      action: {
+        ...base,
+        action: "REPLAN_SUBTASKS",
+        payload: {
+          current_tasks: payload.current_tasks || [],
+          completed_tasks: payload.completed_tasks || [],
+          failed_tasks: payload.failed_tasks || [],
+          new_plan: newPlan,
         },
       },
     };

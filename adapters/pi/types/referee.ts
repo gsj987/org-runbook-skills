@@ -13,13 +13,16 @@
 
 /**
  * Allowed orchestrator actions (PRD Section 6.1)
+ * Including optional actions (G4): CANCEL_TASK, REPLAN_SUBTASKS
  */
 export type OrchestratorActionType =
   | "SPAWN_SUBTASK"
   | "MERGE_SUBTASK_RESULT"
   | "ADVANCE_PHASE"
   | "RAISE_BLOCKER"
-  | "REQUEST_USER_DECISION";
+  | "REQUEST_USER_DECISION"
+  | "CANCEL_TASK"         // G4: Cancel a task
+  | "REPLAN_SUBTASKS";    // G4: Replan child tasks
 
 /**
  * All allowed action types for validation
@@ -30,6 +33,8 @@ export const ALLOWED_ACTIONS: OrchestratorActionType[] = [
   "ADVANCE_PHASE",
   "RAISE_BLOCKER",
   "REQUEST_USER_DECISION",
+  "CANCEL_TASK",
+  "REPLAN_SUBTASKS",
 ];
 
 /**
@@ -190,6 +195,38 @@ export interface RequestUserDecisionAction extends BaseOrchestratorAction {
 }
 
 /**
+ * CANCEL_TASK - Cancel a task (G4)
+ * Optional action for terminating a task without completing it.
+ */
+export interface CancelTaskAction extends BaseOrchestratorAction {
+  action: "CANCEL_TASK";
+  payload: {
+    task_id: string;
+    reason: string;
+    alternatives?: string[];
+  };
+}
+
+/**
+ * REPLAN_SUBTASKS - Replan child tasks (G4)
+ * Optional action for regenerating child task plan.
+ */
+export interface ReplanSubtasksAction extends BaseOrchestratorAction {
+  action: "REPLAN_SUBTASKS";
+  payload: {
+    current_tasks: string[];
+    completed_tasks: string[];
+    failed_tasks: string[];
+    new_plan: Array<{
+      task_id: string;
+      title: string;
+      role: Role;
+      depends_on: string[];
+    }>;
+  };
+}
+
+/**
  * Union type of all valid orchestrator actions
  */
 export type OrchestratorAction =
@@ -197,7 +234,9 @@ export type OrchestratorAction =
   | MergeSubtaskResultAction
   | AdvancePhaseAction
   | RaiseBlockerAction
-  | RequestUserDecisionAction;
+  | RequestUserDecisionAction
+  | CancelTaskAction
+  | ReplanSubtasksAction;
 
 // ============================================================
 // Evidence Types (from runbook-org)
@@ -230,7 +269,10 @@ export type ValidationErrorCode =
   | "INVALID_PHASE_TRANSITION"
   | "INVALID_ROLE"
   | "INVALID_TASK_ID"
-  | "INVALID_REASON";
+  | "INVALID_REASON"
+  | "INVALID_PARENT_UPDATES"   // G2: Invalid parent_updates field
+  | "EVIDENCE_TYPE_NOT_ALLOWED" // G3: Evidence type not in allowed list
+  | "TASK_ALREADY_CANCELLED";   // G4: Task already cancelled
 
 /**
  * Validation error with code and message
