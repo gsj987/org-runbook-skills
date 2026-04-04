@@ -8,6 +8,7 @@
  * - Path protection guardrail
  * - Role-based tool restrictions
  * - Supervisor auto-start integration via HTTP API
+ * - Referee validation layer for orchestrator compliance
  * 
  * Based on:
  * - pi Extension API (pi.on, pi.registerTool)
@@ -20,6 +21,37 @@ import { Type } from "@sinclair/typebox";
 import { spawn, ChildProcess } from "child_process";
 import * as path from "path";
 import * as fs from "fs";
+
+// ============================================================
+// Referee Integration (Phase 1-5)
+// ============================================================
+
+import { createReferee } from "./referee/index.js";
+import type { OrchestratorAction, OrgState, ValidationResult } from "./referee/types/referee.js";
+
+let refereeInstance = createReferee({
+  strictMode: false,
+  detectSpecialistContent: false,
+  validatePhaseGates: false,
+  maxRetries: 3,
+});
+
+// Helper to set org state from workflow file
+function loadOrgStateForReferee(workflowPath: string): OrgState | null {
+  try {
+    if (!fs.existsSync(workflowPath)) {
+      return null;
+    }
+    const content = fs.readFileSync(workflowPath, "utf-8");
+    // Dynamic import to avoid circular deps
+    return { 
+      workflowPath,
+      tasks: new Map(),
+    };
+  } catch {
+    return null;
+  }
+}
 
 // ============================================================
 // Exported Workflow Functions (for programmatic use)
@@ -1059,6 +1091,200 @@ This writes all pending findings and status changes to the file.`,
           findingsWritten,
           statusChangesWritten,
         },
+      };
+    },
+  });
+
+  // ============================================================
+  // Referee Tools (Phase 1-5 Validation)
+  // ============================================================
+
+  // referee.enable - Enable/disable referee features
+  pi.registerTool({
+    name: "referee.enable",
+    label: "Enable Referee Features",
+    description: `Enable or disable Referee validation features.
+
+PHASE 1 (Always available):
+- JSON schema validation
+- Task existence checks
+- Single action rule
+
+PHASE 2 (Enable with detectSpecialistContent: true):
+- Specialist content detection
+- Citation validation
+- Role gate validation
+
+PHASE 3 (Enable with validatePhaseGates: true):
+- Phase gate policy enforcement
+
+PARAMETERS:
+- detectSpecialistContent: Enable Phase 2 specialist detection
+- validatePhaseGates: Enable Phase 3 phase gates
+- maxRetries: Max retries before escalation (default: 3)`,
+    parameters: Type.Object({
+      detectSpecialistContent: Type.Optional(Type.Boolean({ description: "Enable specialist content detection (Phase 2)" })),
+      validatePhaseGates: Type.Optional(Type.Boolean({ description: "Enable phase gate validation (Phase 3)" })),
+      maxRetries: Type.Optional(Type.Number({ description: "Max retries before escalation" })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { detectSpecialistContent, validatePhaseGates, maxRetries } = params as {
+        detectSpecialistContent?: boolean;
+        validatePhaseGates?: boolean;
+        maxRetries?: number;
+      };
+
+      refereeInstance.updateConfig({
+        detectSpecialistContent: detectSpecialistContent ?? false,
+        validatePhaseGates: validatePhaseGates ?? false,
+      });
+
+      if (maxRetries !== undefined) {
+        refereeInstance.getConfig().maxRetries = maxRetries;
+      }
+
+      const config = refereeInstance.getConfig();
+      return {
+        content: [{
+          type: "text",
+          text: `Referee features updated:
+- Specialist detection: ${config.detectSpecialistContent ? "enabled" : "disabled"}
+- Phase gate validation: ${config.validatePhaseGates ? "enabled" : "disabled"}
+- Max retries: ${config.maxRetries}`,
+        }],
+        details: { success: true, config },
+      };
+    },
+  });
+
+  // referee.process - Process orchestrator output end-to-end
+  pi.registerTool({
+    name: "referee.process",
+    label: "Process Orchestrator Action",
+    description: `Process orchestrator output through the referee validation layer.
+
+This tool:
+1. Parses JSON action from raw output
+2. Validates against protocol rules
+3. Returns valid action or retry envelope
+
+USE WHEN:
+- About to send orchestrator output to the supervisor
+- Validating orchestrator compliance before workflow update
+- Checking if action is allowed
+
+PARAMETERS:
+- rawOutput: The orchestrator's raw output (should be JSON or contain JSON)
+- parentTaskId: The parent task ID for context
+
+RETURNS:
+- If valid: The parsed action object
+- If invalid: Retry envelope with error details and guidance`,
+    parameters: Type.Object({
+      rawOutput: Type.String({ description: "Raw orchestrator output to validate" }),
+      parentTaskId: Type.String({ description: "Parent task ID for validation context" }),
+      workflowPath: Type.Optional(Type.String({ description: "Workflow path for org state validation" })),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { rawOutput, parentTaskId, workflowPath } = params as {
+        rawOutput: string;
+        parentTaskId: string;
+        workflowPath?: string;
+      };
+
+      // Load org state if workflow path provided
+      if (workflowPath) {
+        const orgState = loadOrgStateForReferee(workflowPath);
+        if (orgState) {
+          refereeInstance.setOrgState(orgState);
+        }
+      }
+
+      const result = refereeInstance.process(rawOutput, parentTaskId);
+
+      if (result.success) {
+        return {
+          content: [{
+            type: "text",
+            text: `✅ Action validated: ${result.action?.action}`,
+          }],
+          details: {
+            success: true,
+            action: result.action,
+            checkpoint: `✅ referee validated ${result.action?.action} for ${parentTaskId}`,
+          },
+        };
+      } else {
+        const envelope = result.retryEnvelope!;
+        return {
+          content: [{
+            type: "text",
+            text: refereeInstance.formatRetryAsMarkdown(envelope),
+          }],
+          details: {
+            success: false,
+            retryEnvelope: envelope,
+            checkpoint: `❌ referee rejected action for ${parentTaskId}`,
+          },
+        };
+      }
+    },
+  });
+
+  // referee.status - Get referee validation status
+  pi.registerTool({
+    name: "referee.status",
+    label: "Get Referee Status",
+    description: `Get current referee validation status.
+
+RETURNS:
+- Config: Current referee settings
+- Retry counts per task
+- Whether Phase 2/3 features are enabled`,
+    parameters: Type.Object({}),
+    execute: async (_toolCallId, _params) => {
+      const config = refereeInstance.getConfig();
+      return {
+        content: [{
+          type: "text",
+          text: `Referee Status:
+- Phase 1 (Basic): enabled
+- Phase 2 (Specialist Detection): ${config.detectSpecialistContent ? "enabled" : "disabled"}
+- Phase 3 (Phase Gates): ${config.validatePhaseGates ? "enabled" : "disabled"}
+- Max retries: ${config.maxRetries}`,
+        }],
+        details: {
+          config,
+          retryCounts: {}, // Could track per-task retries here
+        },
+      };
+    },
+  });
+
+  // referee.reset - Reset retry count for a task
+  pi.registerTool({
+    name: "referee.reset",
+    label: "Reset Referee State",
+    description: `Reset referee retry count for a task.
+
+USE WHEN:
+- Task moved to a new phase
+- After successful action
+- Resetting for new attempt`,
+    parameters: Type.Object({
+      parentTaskId: Type.String({ description: "Parent task ID to reset" }),
+    }),
+    execute: async (_toolCallId, params) => {
+      const { parentTaskId } = params as { parentTaskId: string };
+      refereeInstance.resetRetryCount(parentTaskId);
+      refereeInstance.clearOrgState();
+
+      return {
+        content: [{
+          type: "text",
+          text: `Referee state reset for ${parentTaskId}`,
+        }],
+        details: { success: true, parentTaskId },
       };
     },
   });
