@@ -139,6 +139,70 @@ worker.kill({ workerId: string })
 
 ---
 
+## Referee Validation Layer
+
+The Referee ensures orchestrator compliance with the runbook protocol.
+
+### referee.enable
+
+Enable additional validation features:
+
+```typescript
+await referee.enable({
+  detectSpecialistContent: true,  // Phase 2
+  validatePhaseGates: true,        // Phase 3
+  maxRetries: 3
+})
+```
+
+### referee.process
+
+Validate orchestrator output before sending to supervisor:
+
+```typescript
+const result = await referee.process({
+  rawOutput: orchestratorResponse,
+  parentTaskId: "parent-001",
+  workflowPath: "./workflow.org"
+})
+
+if (result.success) {
+  // Action is valid, proceed
+} else {
+  // Show retry envelope to orchestrator
+  // result.details.retryEnvelope contains guidance
+}
+```
+
+### referee.status
+
+Check current referee configuration:
+
+```typescript
+await referee.status()
+// → Returns enabled features and retry counts
+```
+
+### referee.reset
+
+Reset retry state after successful action:
+
+```typescript
+await referee.reset({ parentTaskId: "parent-001" })
+```
+
+---
+
+## Validation Phases
+
+| Phase | Features | Enable |
+|-------|----------|--------|
+| Phase 1 | JSON schema, task existence, single action | Always |
+| Phase 2 | Specialist detection, citation validation | `detectSpecialistContent: true` |
+| Phase 3 | Phase gate policy enforcement | `validatePhaseGates: true` |
+
+---
+
 ## Supervisor Mode
 
 For full multi-agent orchestration, run the supervisor first:
