@@ -995,6 +995,74 @@ Status changes are queued and persisted to the file when workflow.update() is ca
     },
   });
 
+  /**
+   * Ensure a task headline exists in the workflow file.
+   * If the task ID is not found, auto-creates a TODO task headline.
+   * This allows orchestrators to append findings for tasks that were spawned
+   * without pre-existing task headlines.
+   */
+  async function ensureTaskExists(workflowPath: string, taskId: string): Promise<boolean> {
+    try {
+      const content = fs.readFileSync(workflowPath, "utf-8");
+      // Check if task ID already exists
+      if (content.includes(`:ID: ${taskId}`)) {
+        return true; // Task already exists
+      }
+
+      // Find the parent task (task with "IN-PROGRESS" status) to insert after
+      // Insert the new task before the first "*** TODO Phase:" line (phase gates)
+      const lines = content.split("\n");
+      let insertIndex = lines.length;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith("*** TODO Phase:")) {
+          insertIndex = i;
+          break;
+        }
+      }
+
+      const now = new Date().toISOString();
+      const taskTitle = taskId
+        .replace(/^parent-/, "Parent: ")
+        .replace(/^list-files-(\d+)$/, "List Files Task $1")
+        .replace(/^explain-(\d+)$/, "Explain Task $1")
+        .replace(/-/g, " ")
+        .replace(/([a-z])([A-Z])/g, "$1 $2");
+
+      const newTaskBlock = `
+*** TODO ${taskTitle}
+:PROPERTIES:
+:ID: ${taskId}
+:PARENT: ${taskId.includes("parent-") ? taskId : "unknown"}
+:OWNER: orchestrator
+:PHASE: discovery
+:CREATED: ${now}
+:END:
+- Goal :: ${taskTitle}
+- Context ::
+- Findings ::
+- Evidence ::
+- Next Actions ::
+`;
+
+      // Insert the new task block
+      if (insertIndex === lines.length) {
+        // No phase gate found, append at end
+        lines.push(newTaskBlock);
+      } else {
+        lines.splice(insertIndex, 0, newTaskBlock);
+      }
+
+      fs.writeFileSync(workflowPath, lines.join("\n"));
+      console.log(`[ensureTaskExists] Auto-created task: ${taskId}`);
+      return false; // Task was newly created
+    } catch (error) {
+      console.error(`[ensureTaskExists] Failed to auto-create task ${taskId}: ${error}`);
+      return false;
+    }
+  }
+
   // workflow.update
   pi.registerTool({
     name: "workflow.update",
@@ -1044,6 +1112,11 @@ This writes all pending findings and status changes to the file.`,
           findingsByTask.set(finding.taskId, existing);
         }
 
+        // Auto-create task headlines for non-existent tasks before supervisor write
+        for (const [taskId] of findingsByTask) {
+          await ensureTaskExists(absoluteWorkflowPath, taskId);
+        }
+
         // Send each group to supervisor
         for (const [taskId, taskFindings] of findingsByTask) {
           try {
@@ -1066,6 +1139,11 @@ This writes all pending findings and status changes to the file.`,
 
       // Write status changes
       if (pendingStatusChanges.length > 0) {
+        // Ensure all tasks for status changes exist
+        for (const change of pendingStatusChanges) {
+          await ensureTaskExists(absoluteWorkflowPath, change.taskId);
+        }
+
         for (const change of pendingStatusChanges) {
           try {
             const statusResponse = await supervisorRequest<{ success: boolean; noChange?: boolean }>("/workflow/status", {
