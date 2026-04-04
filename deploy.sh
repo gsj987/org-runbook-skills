@@ -208,6 +208,10 @@ deploy_adapter() {
     # Copy package.json and install dependencies
     cp -f "$source_dir/package.json" "$target_dir/"
     
+    # Create symlinks for referee module and types (required by extension)
+    ln -sfn "$source_dir/referee" "$target_dir/referee"
+    ln -sfn "$source_dir/types" "$target_dir/types"
+    
     echo -e "${BLUE}→${NC} Installing dependencies..."
     (cd "$target_dir" && npm install) || {
         echo -e "${RED}✗ npm install failed in $target_dir${NC}"
