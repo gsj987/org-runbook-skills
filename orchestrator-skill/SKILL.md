@@ -389,6 +389,40 @@ Anti-pattern (findings will be LOST):
 
 **Always call workflow.update() after collecting worker results!**
 
+### Phase Advancement Pattern ⚠️ REQUIRED AFTER COMPLETION
+
+**After all child tasks in a phase are DONE, the orchestrator MUST advance the phase!**
+
+```
+7. workflow.advancePhase({ nextPhase: "design", workflowPath })  ← ADVANCE PHASE
+   → Marks the current phase gate as DONE
+   → Updates the parent task's :PHASE: property
+   → REQUIRED: Must be called for each completed phase
+```
+
+**Example progression:**
+```
+Phase: discovery
+  └── All scan-* tasks DONE
+      → workflow.advancePhase({ nextPhase: "design" })
+      → Gate "discovery → design" changes from TODO → DONE
+      → Parent :PHASE: changes from "discovery" → "design"
+
+Phase: design
+  └── [spawn workers for design tasks, await, record, set DONE]
+      → workflow.advancePhase({ nextPhase: "implementation" })
+      → Gate "design → implementation" changes from TODO → DONE
+      → Parent :PHASE: changes from "design" → "implementation"
+
+[repeat for each phase]
+```
+
+**CRITICAL RULES:**
+- `nextPhase` must be the IMMEDIATE next phase (no skipping)
+- Phase sequence: discovery → design → implementation → test → integration → deploy-check → acceptance
+- Only advance AFTER all child tasks in current phase are marked DONE
+- The gate for the completed phase will be marked DONE automatically
+
 ### File & Git Operations
 ```
 ls(path?)

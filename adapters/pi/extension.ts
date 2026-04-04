@@ -974,16 +974,137 @@ Status changes are queued and persisted to the file when workflow.update() is ca
     },
   });
 
+  // ============================================================
+  // Phase Advancement
+  // ============================================================
+
+  const PHASE_SEQUENCE = [
+    "discovery", "design", "implementation", "test",
+    "integration", "deploy-check", "acceptance"
+  ] as const;
+
+  /**
+   * Advance the project to the next phase.
+   * - Finds the current phase from the IN-PROGRESS parent task's :PHASE: property
+   * - Updates :PHASE: to nextPhase
+   * - Marks the matching gate line as DONE (*** TODO Phase: X → Y becomes *** DONE Phase: X → Y)
+   * - Writes changes directly to the workflow file
+   */
+  async function advancePhase(workflowPath: string, nextPhase: string): Promise<void> {
+    const content = fs.readFileSync(workflowPath, "utf-8");
+    const lines = content.split("\n");
+
+    // Pass 1: Find current phase from the IN-PROGRESS parent task
+    let currentPhase = "";
+    let inParentProperties = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      if (trimmed.startsWith("** IN-PROGRESS")) {
+        inParentProperties = true;
+      } else if (inParentProperties && trimmed === ":END:") {
+        inParentProperties = false;
+      } else if (inParentProperties && trimmed.startsWith(":PHASE:")) {
+        currentPhase = trimmed.replace(":PHASE:", "").trim();
+        break;
+      }
+    }
+
+    if (!currentPhase) {
+      throw new Error("Could not determine current phase. Parent task has no :PHASE: property.");
+    }
+
+    const currentIdx = PHASE_SEQUENCE.indexOf(currentPhase as typeof PHASE_SEQUENCE[number]);
+    const nextIdx = PHASE_SEQUENCE.indexOf(nextPhase as typeof PHASE_SEQUENCE[number]);
+
+    if (currentIdx === -1) {
+      throw new Error(`Unknown current phase: "${currentPhase}". Valid: ${PHASE_SEQUENCE.join(", ")}`);
+    }
+    if (nextIdx === -1) {
+      throw new Error(`Unknown next phase: "${nextPhase}". Valid: ${PHASE_SEQUENCE.join(", ")}`);
+    }
+    if (nextIdx !== currentIdx + 1) {
+      throw new Error(
+        `Cannot skip phases: current="${currentPhase}", next="${nextPhase}". ` +
+        `Must advance to "${PHASE_SEQUENCE[currentIdx + 1]}" next.`
+      );
+    }
+
+    // Pass 2: Rewrite file (update phase property + mark gate as DONE)
+    const updatedLines: string[] = [];
+    let inParent = false;
+    let changed = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      // Track when we're inside the IN-PROGRESS parent task's properties
+      if (trimmed.startsWith("** IN-PROGRESS")) {
+        inParent = true;
+      } else if (inParent && trimmed === ":END:") {
+        inParent = false;
+      }
+
+      // Update :PHASE: in parent task
+      if (inParent && trimmed.startsWith(":PHASE:")) {
+        updatedLines.push(line.replace(trimmed, `:PHASE: ${nextPhase}`));
+        changed = true;
+        continue;
+      }
+
+      // Mark matching gate as DONE
+      // Pattern: *** TODO Phase: discovery → design
+      // Becomes:   *** DONE Phase: discovery → design
+      if (trimmed.startsWith("*** TODO Phase:")) {
+        const arrow = ` → `;
+        const gateMatch = `${currentPhase}${arrow}${nextPhase}`;
+        if (trimmed.includes(gateMatch)) {
+          updatedLines.push(line.replace("*** TODO", "*** DONE"));
+          changed = true;
+          continue;
+        }
+      }
+
+      updatedLines.push(line);
+    }
+
+    if (!changed) {
+      throw new Error(
+        `No changes made during phase advance. ` +
+        `Check that current phase="${currentPhase}" and gate for "${currentPhase} → ${nextPhase}" exists.`
+      );
+    }
+
+    fs.writeFileSync(workflowPath, updatedLines.join("\n"));
+  }
+
   // workflow.advancePhase
   pi.registerTool({
     name: "workflow.advancePhase",
     label: "Advance Phase",
-    description: "Advance the workflow to the next phase.",
+    description: `Advance the workflow to the next phase. Must be called after all child tasks
+in the current phase are marked DONE and the phase gate is satisfied.
+This marks the current phase gate as DONE and updates the parent task's PHASE property.`,
     parameters: Type.Object({
       nextPhase: Type.String({ description: "Next phase: discovery, design, implementation, test, integration, deploy-check, or acceptance" }),
+      workflowPath: Type.Optional(Type.String({ description: "Path to workflow.org file. Uses currentWorkflowPath if not provided." })),
     }),
     execute: async (_toolCallId, params) => {
-      const { nextPhase } = params as { nextPhase: string };
+      const { nextPhase, workflowPath: wp } = params as {
+        nextPhase: string;
+        workflowPath?: string;
+      };
+
+      const targetPath = wp || currentWorkflowPath;
+      if (!targetPath) {
+        throw new Error("No workflow path. Use workflow.init() first or pass workflowPath.");
+      }
+      if (!fs.existsSync(targetPath)) {
+        throw new Error(`Workflow file not found: ${targetPath}`);
+      }
+
+      await advancePhase(targetPath, nextPhase);
 
       return {
         content: [{ type: "text", text: `Phase advanced to ${nextPhase}` }],
